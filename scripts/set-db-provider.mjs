@@ -7,12 +7,35 @@
 //
 // Runs automatically via `postinstall` and the build scripts.
 
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const schemaPath = join(__dirname, "..", "prisma", "schema.prisma");
+const root = join(__dirname, "..");
+const schemaPath = join(root, "prisma", "schema.prisma");
+
+function loadEnvFile() {
+  const envPath = join(root, ".env");
+  if (!existsSync(envPath)) return;
+  for (const line of readFileSync(envPath, "utf8").split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const eq = trimmed.indexOf("=");
+    if (eq === -1) continue;
+    const key = trimmed.slice(0, eq).trim();
+    let val = trimmed.slice(eq + 1).trim();
+    if (
+      (val.startsWith('"') && val.endsWith('"')) ||
+      (val.startsWith("'") && val.endsWith("'"))
+    ) {
+      val = val.slice(1, -1);
+    }
+    if (!(key in process.env)) process.env[key] = val;
+  }
+}
+
+loadEnvFile();
 
 const url = process.env.DATABASE_URL || "file:./dev.db";
 
