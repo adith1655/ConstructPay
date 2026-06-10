@@ -1,0 +1,174 @@
+// ConstructPay — Prisma schema (MVP, India edition)
+// Local dev uses SQLite; production (Vercel) uses PostgreSQL.
+// The datasource `provider` below is set automatically at install/build time by
+// scripts/set-db-provider.mjs based on DATABASE_URL (sqlite | postgresql).
+//
+// Role hierarchy (top -> bottom):
+//   SUPER_ADMIN   Platform owner (ConstructPay developer/owner) — single account
+//   ADMIN         Subscriber company owner / payroll director (the tenant)
+//   SITE_MANAGER  Foreman over one or more job sites
+//   WORKER        On-site employee / contract labour
+//
+// Classification: PAYROLL (on-roll, PF/ESI) | CONTRACTOR (contract labour, TDS)
+// TimeEntry status: OPEN | PENDING | APPROVED | FLAGGED | REJECTED
+// AccessRequest status: PENDING | APPROVED | DENIED
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// A subscriber organisation (tenant). Each Admin owns one Company.
+model Company {
+  id         String   @id @default(cuid())
+  name       String   @unique
+  city       String   @default("Mumbai")
+  gstin      String?
+  plan       String   @default("Growth")
+  monthlyFee Float     @default(0)
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  users    User[]
+  jobSites JobSite[]
+  projects Project[]
+}
+
+model User {
+  id             String   @id @default(cuid())
+  email          String   @unique
+  passwordHash   String
+  fullName       String
+  role           String   @default("WORKER")
+  classification String   @default("PAYROLL")
+  trade          String?
+  hourlyRate     Float    @default(0)
+  // For contract labour: PAN + GSTIN on file before payment can be released.
+  complianceDocsOnFile Boolean @default(false)
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+
+  siteAssignments UserSite[]
+  timeEntries     TimeEntry[]    @relation("WorkerEntries")
+  approvedEntries TimeEntry[]    @relation("ApproverEntries")
+  siteReports     DailySiteReport[]
+}
+
+model JobSite {
+  id              String   @id @default(cuid())
+  name            String
+  address         String?
+  city            String   @default("Mumbai")
+  latitude        Float?
+  longitude       Float?
+  geofenceRadius  Int      @default(300)
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  assignments UserSite[]
+  projects    Project[]
+  timeEntries TimeEntry[]
+  costCodes   CostCode[]
+  siteReports DailySiteReport[]
+}
+
+model UserSite {
+  id        String  @id @default(cuid())
+  userId    String
+  jobSiteId String
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobSite JobSite @relation(fields: [jobSiteId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, jobSiteId])
+}
+
+model Project {
+  id            String   @id @default(cuid())
+  name          String
+  contractValue Float    @default(0)
+  startDate     DateTime?
+  endDate       DateTime?
+
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  jobSiteId String
+  jobSite   JobSite @relation(fields: [jobSiteId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  costCodes CostCode[]
+}
+
+model CostCode {
+  id          String  @id @default(cuid())
+  code        String
+  description String
+  projectId   String
+  jobSiteId   String
+  budgetHours Float   @default(0)
+  budgetCost  Float   @default(0)
+
+  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  jobSite     JobSite     @relation(fields: [jobSiteId], references: [id], onDelete: Cascade)
+  timeEntries TimeEntry[]
+}
+
+model TimeEntry {
+  id           String    @id @default(cuid())
+  userId       String
+  jobSiteId    String
+  costCodeId   String?
+  clockIn      DateTime
+  clockOut     DateTime?
+  hours        Float     @default(0)
+  status       String    @default("OPEN")
+  note         String?
+  flagReason   String?
+  approvedById String?
+  createdAt    DateTime  @default(now())
+
+  user       User      @relation("WorkerEntries", fields: [userId], references: [id], onDelete: Cascade)
+  approvedBy User?     @relation("ApproverEntries", fields: [approvedById], references: [id])
+  jobSite    JobSite   @relation(fields: [jobSiteId], references: [id], onDelete: Cascade)
+  costCode   CostCode? @relation(fields: [costCodeId], references: [id])
+}
+
+model DailySiteReport {
+  id             String   @id @default(cuid())
+  jobSiteId      String
+  userId         String
+  date           DateTime @default(now())
+  weather        String
+  temperature    Int?
+  safetyIncident Boolean  @default(false)
+  notes          String?
+
+  jobSite JobSite @relation(fields: [jobSiteId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// A business requesting a ConstructPay subscription. Approving one provisions a
+// new Company tenant plus its first ADMIN account.
+model AccessRequest {
+  id            String   @id @default(cuid())
+  fullName      String
+  businessName  String
+  roleRequested String
+  email         String
+  phone         String?
+  city          String?
+  employees     String?
+  useCase       String?
+  status        String   @default("PENDING")
+  createdAt     DateTime @default(now())
+}
