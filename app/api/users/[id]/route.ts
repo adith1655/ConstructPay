@@ -14,7 +14,7 @@ export async function PATCH(
   req: Request,
   { params }: { params: { id: string } }
 ) {
-  const { user, response } = await authorize([ROLES.ADMIN]);
+  const { user, response } = await authorize([ROLES.ADMIN, ROLES.SITE_MANAGER]);
   if (!user || !user.companyId) return response ?? error("No company", 403);
 
   const body = await req.json().catch(() => null);
@@ -29,6 +29,15 @@ export async function PATCH(
   if (!target) return error("User not found.", 404);
   if (target.companyId !== user.companyId) {
     return error("You can only manage users in your own company.", 403);
+  }
+
+  if (user.role === ROLES.SITE_MANAGER) {
+    if (target.role !== ROLES.WORKER) {
+      return error("Site managers can only update worker accounts.");
+    }
+    if (parsed.data.role) {
+      return error("Site managers cannot change user roles.");
+    }
   }
 
   const updated = await prisma.user.update({

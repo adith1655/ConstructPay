@@ -55,10 +55,13 @@ model User {
   companyId String?
   company   Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
 
-  siteAssignments UserSite[]
-  timeEntries     TimeEntry[]    @relation("WorkerEntries")
-  approvedEntries TimeEntry[]    @relation("ApproverEntries")
-  siteReports     DailySiteReport[]
+  siteAssignments   UserSite[]
+  timeEntries       TimeEntry[]        @relation("WorkerEntries")
+  approvedEntries   TimeEntry[]        @relation("ApproverEntries")
+  siteReports       DailySiteReport[]
+  materialIndents   MaterialIndent[]
+  goodsReceipts     GoodsReceiptNote[]
+  budgetAuditLogs   BudgetAuditLog[]
 }
 
 model JobSite {
@@ -69,17 +72,21 @@ model JobSite {
   latitude        Float?
   longitude       Float?
   geofenceRadius  Int      @default(300)
+  budgetLimit     Float    @default(0)
   active          Boolean  @default(true)
   createdAt       DateTime @default(now())
 
   companyId String
   company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
-  assignments UserSite[]
-  projects    Project[]
-  timeEntries TimeEntry[]
-  costCodes   CostCode[]
-  siteReports DailySiteReport[]
+  assignments     UserSite[]
+  projects        Project[]
+  timeEntries     TimeEntry[]
+  costCodes       CostCode[]
+  siteReports     DailySiteReport[]
+  siteInventory   SiteInventory[]
+  materialIndents MaterialIndent[]
+  goodsReceipts   GoodsReceiptNote[]
 }
 
 model UserSite {
@@ -118,9 +125,81 @@ model CostCode {
   budgetHours Float   @default(0)
   budgetCost  Float   @default(0)
 
-  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  jobSite     JobSite     @relation(fields: [jobSiteId], references: [id], onDelete: Cascade)
-  timeEntries TimeEntry[]
+  project         Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  jobSite         JobSite          @relation(fields: [jobSiteId], references: [id], onDelete: Cascade)
+  timeEntries     TimeEntry[]
+  budgetAuditLogs BudgetAuditLog[]
+}
+
+// Audit trail for budget line-item changes (add / update / remove cost codes).
+model BudgetAuditLog {
+  id          String   @id @default(cuid())
+  costCodeId  String?
+  projectId   String
+  jobSiteId   String
+  action      String   // ADD | UPDATE | REMOVE
+  code        String
+  description String?
+  budgetHours Float    @default(0)
+  budgetCost  Float    @default(0)
+  performedBy String
+  createdAt   DateTime @default(now())
+
+  costCode    CostCode? @relation(fields: [costCodeId], references: [id], onDelete: SetNull)
+  performer   User      @relation(fields: [performedBy], references: [id], onDelete: Cascade)
+}
+
+// ---- Inventory module ----
+
+model InventoryItem {
+  id            String  @id @default(cuid())
+  name          String
+  sku           String  @unique
+  unitOfMeasure String
+  minStockLevel Float   @default(0)
+
+  siteStock SiteInventory[]
+}
+
+model SiteInventory {
+  id                String   @id @default(cuid())
+  jobSiteId         String
+  inventoryItemId   String
+  quantityAvailable Float    @default(0)
+  lastUpdated       DateTime @default(now()) @updatedAt
+
+  jobSite       JobSite       @relation(fields: [jobSiteId], references: [id], onDelete: Cascade)
+  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+
+  @@unique([jobSiteId, inventoryItemId])
+}
+
+model MaterialIndent {
+  id          String   @id @default(cuid())
+  jobSiteId   String
+  requestedBy String
+  status      String   @default("PENDING") // PENDING | APPROVED | REJECTED | ORDERED
+  items       String   // JSON array: [{"item_id":"...","qty":50}]
+  createdAt   DateTime @default(now())
+
+  jobSite   JobSite            @relation(fields: [jobSiteId], references: [id], onDelete: Cascade)
+  requester User               @relation(fields: [requestedBy], references: [id], onDelete: Cascade)
+  grns      GoodsReceiptNote[]
+}
+
+model GoodsReceiptNote {
+  id                String   @id @default(cuid())
+  indentId          String?
+  jobSiteId         String
+  receivedBy        String
+  vendorName        String
+  invoiceOrChallan  String
+  itemsReceived     String   // JSON: [{"item_id":"...","qty_received":50,"unit_price":450}]
+  receivedAt        DateTime @default(now())
+
+  indent    MaterialIndent? @relation(fields: [indentId], references: [id], onDelete: SetNull)
+  jobSite   JobSite         @relation(fields: [jobSiteId], references: [id], onDelete: Cascade)
+  receiver  User            @relation(fields: [receivedBy], references: [id], onDelete: Cascade)
 }
 
 model TimeEntry {

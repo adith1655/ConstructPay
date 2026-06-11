@@ -63,3 +63,29 @@ export const WEATHER_OPTIONS = [
   "Heat Wave",
   "High Wind",
 ] as const;
+
+export const INDENT_STATUS = {
+  PENDING: "PENDING",
+  APPROVED: "APPROVED",
+  REJECTED: "REJECTED",
+  ORDERED: "ORDERED",
+} as const;
+
+export const INDENT_STATUS_LABELS: Record<string, string> = {
+  PENDING: "Pending",
+  APPROVED: "Approved",
+  REJECTED: "Rejected",
+  ORDERED: "Ordered",
+};
+
+export const BUDGET_AUDIT_ACTION = {
+  ADD: "ADD",
+  UPDATE: "UPDATE",
+  REMOVE: "REMOVE",
+} as const;
+
+export const BUDGET_AUDIT_ACTION_LABELS: Record<string, string> = {
+  ADD: "Added",
+  UPDATE: "Updated",
+  REMOVE: "Removed",
+};

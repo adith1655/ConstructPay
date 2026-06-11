@@ -40,9 +40,33 @@ const NAV: NavItem[] = [
     roles: [ROLES.ADMIN, ROLES.SITE_MANAGER],
   },
   {
+    href: "/dashboard/budget",
+    label: "Budget Audit",
+    icon: "📊",
+    roles: [ROLES.ADMIN, ROLES.SITE_MANAGER],
+  },
+  {
+    href: "/dashboard/inventory",
+    label: "Inventory",
+    icon: "📦",
+    roles: [ROLES.ADMIN, ROLES.SITE_MANAGER],
+  },
+  {
+    href: "/dashboard/site-managers",
+    label: "Site Managers",
+    icon: "👷",
+    roles: [ROLES.ADMIN],
+  },
+  {
+    href: "/dashboard/workers",
+    label: "Crew / Workers",
+    icon: "◍",
+    roles: [ROLES.SITE_MANAGER],
+  },
+  {
     href: "/dashboard/users",
     label: "Team & Roles",
-    icon: "◍",
+    icon: "◎",
     roles: [ROLES.ADMIN],
   },
   {

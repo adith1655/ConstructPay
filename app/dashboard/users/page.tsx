@@ -70,7 +70,7 @@ export default function UsersPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-steel-900">Team &amp; Roles</h1>
           <p className="mt-1 text-sm text-steel-500">
-            Provision site managers and workers, set roles (RBAC), wage rates, and PAN/GSTIN status for contract labour.
+            Full team roster — roles, wage rates, and compliance. Use Site Managers tab to add foreman logins.
           </p>
         </div>
         <button onClick={() => setShowCreate((v) => !v)} className="btn-primary">

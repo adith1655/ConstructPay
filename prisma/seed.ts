@@ -188,6 +188,38 @@ async function main() {
     },
   });
 
+  // ---- Inventory catalog & site stock ----
+  const invItems = [
+    { id: "inv_cement", name: "Cement OPC 53 Grade", sku: "CEM-OPC53", unitOfMeasure: "Bags", minStockLevel: 100 },
+    { id: "inv_steel", name: "TMT Steel 12mm", sku: "STL-TMT12", unitOfMeasure: "MT", minStockLevel: 5 },
+    { id: "inv_sand", name: "River Sand (Fine)", sku: "SND-FINE", unitOfMeasure: "CUM", minStockLevel: 20 },
+    { id: "inv_brick", name: "Fly Ash Bricks", sku: "BRK-FLY", unitOfMeasure: "Nos", minStockLevel: 5000 },
+  ];
+  for (const item of invItems) {
+    await prisma.inventoryItem.upsert({ where: { id: item.id }, update: {}, create: item });
+  }
+
+  const siteStock = [
+    { jobSiteId: "site_bkc", inventoryItemId: "inv_cement", quantityAvailable: 250 },
+    { jobSiteId: "site_bkc", inventoryItemId: "inv_steel", quantityAvailable: 12 },
+    { jobSiteId: "site_bkc", inventoryItemId: "inv_sand", quantityAvailable: 45 },
+    { jobSiteId: "site_worli", inventoryItemId: "inv_steel", quantityAvailable: 8 },
+    { jobSiteId: "site_dwarka", inventoryItemId: "inv_brick", quantityAvailable: 12000 },
+    { jobSiteId: "site_dwarka", inventoryItemId: "inv_cement", quantityAvailable: 80 },
+  ];
+  for (const s of siteStock) {
+    await prisma.siteInventory.upsert({
+      where: { jobSiteId_inventoryItemId: { jobSiteId: s.jobSiteId, inventoryItemId: s.inventoryItemId } },
+      update: { quantityAvailable: s.quantityAvailable },
+      create: s,
+    });
+  }
+
+  await prisma.jobSite.update({
+    where: { id: "site_bkc" },
+    data: { budgetLimit: 2_00_00_000 },
+  });
+
   // ---- Access requests (new businesses wanting a subscription) ----
   const requests = [
     { id: "ar_1", fullName: "Kunal Mehta", businessName: "Mehta Constructions LLP", roleRequested: "ADMIN", email: "kunal@mehtaconstructions.in", phone: "+91 98200 11223", city: "Mumbai", employees: "51-100", useCase: "Statutory PF/ESI payroll for two metro projects in Mumbai." },
