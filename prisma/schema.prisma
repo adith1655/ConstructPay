@@ -24,44 +24,62 @@ datasource db {
 
 // A subscriber organisation (tenant). Each Admin owns one Company.
 model Company {
-  id         String   @id @default(cuid())
-  name       String   @unique
-  city       String   @default("Mumbai")
-  gstin      String?
-  plan       String   @default("Growth")
-  monthlyFee Float     @default(0)
-  active     Boolean  @default(true)
-  createdAt  DateTime @default(now())
+  id                  String   @id @default(cuid())
+  name                String   @unique
+  city                String   @default("Mumbai")
+  gstin               String?
+  plan                String   @default("Growth")
+  monthlyFee          Float    @default(0)
+  active              Boolean  @default(true)
+  status              String   @default("PENDING") // PENDING | APPROVED
+  googleOAuthEnabled  Boolean  @default(false)
+  maxAdminSeats       Int      @default(2)
+  createdAt           DateTime @default(now())
 
-  users    User[]
-  jobSites JobSite[]
-  projects Project[]
+  users              User[]
+  jobSites           JobSite[]
+  projects           Project[]
+  assetLocations     AssetLocation[]
+  assetCategories    AssetCategory[]
+  assetDepartments   AssetDepartment[]
+  fixedAssets        FixedAsset[]
+  expenseRecords     ExpenseRecord[]
 }
 
 model User {
-  id             String   @id @default(cuid())
-  email          String   @unique
-  passwordHash   String
-  fullName       String
-  role           String   @default("WORKER")
-  classification String   @default("PAYROLL")
-  trade          String?
-  hourlyRate     Float    @default(0)
-  // For contract labour: PAN + GSTIN on file before payment can be released.
-  complianceDocsOnFile Boolean @default(false)
-  active         Boolean  @default(true)
-  createdAt      DateTime @default(now())
+  id                   String   @id @default(cuid())
+  email                String   @unique
+  passwordHash         String?
+  googleId             String?  @unique
+  googleOAuthEnabled   Boolean  @default(false)
+  fullName             String
+  role                 String   @default("WORKER")
+  classification       String   @default("PAYROLL")
+  trade                String?
+  hourlyRate           Float    @default(0)
+  complianceDocsOnFile Boolean  @default(false)
+  active               Boolean  @default(true)
+  createdAt            DateTime @default(now())
 
   companyId String?
   company   Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
 
-  siteAssignments   UserSite[]
-  timeEntries       TimeEntry[]        @relation("WorkerEntries")
-  approvedEntries   TimeEntry[]        @relation("ApproverEntries")
-  siteReports       DailySiteReport[]
-  materialIndents   MaterialIndent[]
-  goodsReceipts     GoodsReceiptNote[]
-  budgetAuditLogs   BudgetAuditLog[]
+  siteAssignments      UserSite[]
+  timeEntries          TimeEntry[]        @relation("WorkerEntries")
+  approvedEntries      TimeEntry[]        @relation("ApproverEntries")
+  siteReports          DailySiteReport[]
+  materialIndents      MaterialIndent[]
+  goodsReceipts        GoodsReceiptNote[]
+  budgetAuditLogs      BudgetAuditLog[]
+  assetsCreated        FixedAsset[]       @relation("AssetCreator")
+  assetsUpdated        FixedAsset[]       @relation("AssetUpdater")
+  assetAuditLogs       AssetAuditLog[]
+  assetEditRequests    AssetEditRequest[] @relation("EditRequester")
+  assetEditAssignments AssetEditRequest[] @relation("EditAssignee")
+  assetAssignments     AssetAssignment[]  @relation("AssignedWorker")
+  assetAssignmentsMade AssetAssignment[]  @relation("AssignmentCreator")
+  notifications        InAppNotification[]
+  expenseRecords       ExpenseRecord[]
 }
 
 model JobSite {
@@ -87,6 +105,8 @@ model JobSite {
   siteInventory   SiteInventory[]
   materialIndents MaterialIndent[]
   goodsReceipts   GoodsReceiptNote[]
+  fixedAssets     FixedAsset[]
+  expenseRecords  ExpenseRecord[]
 }
 
 model UserSite {
@@ -250,4 +270,157 @@ model AccessRequest {
   useCase       String?
   status        String   @default("PENDING")
   createdAt     DateTime @default(now())
+}
+
+// ---- Fixed asset module (Asset Tiger-style) ----
+
+model AssetLocation {
+  id        String   @id @default(cuid())
+  companyId String
+  name      String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  company Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  assets  FixedAsset[]
+
+  @@unique([companyId, name])
+}
+
+model AssetCategory {
+  id        String   @id @default(cuid())
+  companyId String
+  name      String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  company Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  assets  FixedAsset[]
+
+  @@unique([companyId, name])
+}
+
+model AssetDepartment {
+  id        String   @id @default(cuid())
+  companyId String
+  name      String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  company Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  assets  FixedAsset[]
+
+  @@unique([companyId, name])
+}
+
+model FixedAsset {
+  id                 String    @id @default(cuid())
+  companyId          String
+  jobSiteId          String
+  locationId         String?
+  categoryId         String?
+  departmentId       String?
+  description        String
+  assetTagId         String
+  purchaseDate       DateTime?
+  purchasedFrom      String?
+  cost               Float     @default(0)
+  brand              String
+  model              String
+  serialNo           String
+  photoUrl           String?
+  sourceBillUrl      String?
+  maintenanceDueDate DateTime?
+  warrantyExpiryDate DateTime?
+  lastMovedAt        DateTime?
+  retiredAt          DateTime?
+  createdById        String
+  updatedById        String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  company      Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  jobSite      JobSite            @relation(fields: [jobSiteId], references: [id], onDelete: Cascade)
+  location     AssetLocation?     @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  category     AssetCategory?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  department   AssetDepartment?   @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  createdBy    User               @relation("AssetCreator", fields: [createdById], references: [id])
+  updatedBy    User?              @relation("AssetUpdater", fields: [updatedById], references: [id])
+  auditLogs    AssetAuditLog[]
+  editRequests AssetEditRequest[]
+  assignments  AssetAssignment[]
+
+  @@unique([companyId, assetTagId])
+}
+
+model AssetAuditLog {
+  id          String   @id @default(cuid())
+  assetId     String
+  action      String   // ADD | UPDATE | RETIRE
+  changes     String   // JSON snapshot
+  performedBy String
+  createdAt   DateTime @default(now())
+
+  asset     FixedAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  performer User       @relation(fields: [performedBy], references: [id], onDelete: Cascade)
+}
+
+model AssetEditRequest {
+  id                String   @id @default(cuid())
+  assetId           String
+  requestedById     String
+  assignedManagerId String
+  payload           String   // JSON proposed changes
+  status            String   @default("PENDING") // PENDING | APPLIED | REJECTED
+  createdAt         DateTime @default(now())
+  resolvedAt        DateTime?
+
+  asset           FixedAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  requester       User       @relation("EditRequester", fields: [requestedById], references: [id])
+  assignedManager User       @relation("EditAssignee", fields: [assignedManagerId], references: [id])
+}
+
+model AssetAssignment {
+  id           String   @id @default(cuid())
+  assetId      String
+  userId       String
+  assignedById String
+  assignedAt   DateTime @default(now())
+
+  asset      FixedAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  user       User       @relation("AssignedWorker", fields: [userId], references: [id], onDelete: Cascade)
+  assignedBy User       @relation("AssignmentCreator", fields: [assignedById], references: [id])
+
+  @@unique([assetId, userId])
+}
+
+model ExpenseRecord {
+  id            String    @id @default(cuid())
+  companyId     String
+  jobSiteId     String?
+  description   String
+  amount        Float     @default(0)
+  vendor        String?
+  purchaseDate  DateTime?
+  sourceBillUrl String?
+  lineItemRaw   String?   // JSON
+  createdById   String
+  createdAt     DateTime  @default(now())
+
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  jobSite   JobSite? @relation(fields: [jobSiteId], references: [id], onDelete: SetNull)
+  createdBy User     @relation(fields: [createdById], references: [id], onDelete: Cascade)
+}
+
+model InAppNotification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String   // ALERT | EDIT_REQUEST | SYSTEM
+  title     String
+  body      String
+  read      Boolean  @default(false)
+  metadata  String?  // JSON
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

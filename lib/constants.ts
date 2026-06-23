@@ -89,3 +89,26 @@ export const BUDGET_AUDIT_ACTION_LABELS: Record<string, string> = {
   UPDATE: "Updated",
   REMOVE: "Removed",
 };
+
+export const COMPANY_STATUS = {
+  PENDING: "PENDING",
+  APPROVED: "APPROVED",
+} as const;
+
+export const ASSET_AUDIT_ACTION = {
+  ADD: "ADD",
+  UPDATE: "UPDATE",
+  RETIRE: "RETIRE",
+} as const;
+
+export const EDIT_REQUEST_STATUS = {
+  PENDING: "PENDING",
+  APPLIED: "APPLIED",
+  REJECTED: "REJECTED",
+} as const;
+
+export const NOTIFICATION_TYPE = {
+  ALERT: "ALERT",
+  EDIT_REQUEST: "EDIT_REQUEST",
+  SYSTEM: "SYSTEM",
+} as const;

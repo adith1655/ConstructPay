@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { ok, error, authorize } from "@/lib/api";
 import { ROLES } from "@/lib/constants";
 import { hashPassword } from "@/lib/auth";
+import { googleEnabledForNewUser } from "@/lib/oauth-cascade";
 
 const userSelect = {
   id: true,
@@ -14,10 +15,10 @@ const userSelect = {
   hourlyRate: true,
   complianceDocsOnFile: true,
   active: true,
+  googleOAuthEnabled: true,
   siteAssignments: { include: { jobSite: { select: { name: true } } } },
 } as const;
 
-// Company Admin: all company users. Site Manager: workers only.
 export async function GET(req: Request) {
   const { user, response } = await authorize([ROLES.ADMIN, ROLES.SITE_MANAGER]);
   if (!user || !user.companyId) return response ?? error("No company", 403);
@@ -32,6 +33,8 @@ export async function GET(req: Request) {
     roleWhere = { role: ROLES.SITE_MANAGER };
   } else if (roleFilter === ROLES.WORKER) {
     roleWhere = { role: ROLES.WORKER };
+  } else if (roleFilter === ROLES.ADMIN) {
+    roleWhere = { role: ROLES.ADMIN };
   }
 
   const users = await prisma.user.findMany({
@@ -45,11 +48,11 @@ export async function GET(req: Request) {
 const createSchema = z.object({
   email: z.string().email(),
   fullName: z.string().min(1),
-  role: z.enum([ROLES.SITE_MANAGER, ROLES.WORKER]),
+  role: z.enum([ROLES.ADMIN, ROLES.SITE_MANAGER, ROLES.WORKER]),
   classification: z.enum(["PAYROLL", "CONTRACTOR"]).default("PAYROLL"),
   trade: z.string().optional(),
   hourlyRate: z.coerce.number().min(0).default(0),
-  password: z.string().min(8),
+  password: z.string().min(8).optional(),
   jobSiteId: z.string().optional(),
 });
 
@@ -60,7 +63,7 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => null);
   const parsed = createSchema.safeParse(body);
   if (!parsed.success) {
-    return error("Invalid user data. Password must be at least 8 characters.");
+    return error("Invalid user data.");
   }
 
   if (user.role === ROLES.SITE_MANAGER) {
@@ -69,9 +72,30 @@ export async function POST(req: Request) {
     }
   }
 
+  if (user.role === ROLES.ADMIN && parsed.data.role === ROLES.WORKER) {
+    // Admins use site-managers / workers tabs; still allowed
+  }
+
+  const company = await prisma.company.findUnique({ where: { id: user.companyId } });
+  if (!company) return error("Company not found.", 404);
+
+  if (parsed.data.role === ROLES.ADMIN) {
+    if (user.role !== ROLES.ADMIN) {
+      return error("Only company admins can add admin seats.");
+    }
+    const adminCount = await prisma.user.count({
+      where: { companyId: user.companyId, role: ROLES.ADMIN, active: true },
+    });
+    if (adminCount >= company.maxAdminSeats) {
+      return error(`This subscription allows a maximum of ${company.maxAdminSeats} company admin seats.`);
+    }
+  }
+
   const email = parsed.data.email.toLowerCase();
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) return error("A user with this email already exists.");
+
+  const oauthEnabled = googleEnabledForNewUser(parsed.data.role, company.googleOAuthEnabled);
 
   const created = await prisma.user.create({
     data: {
@@ -81,8 +105,9 @@ export async function POST(req: Request) {
       classification: parsed.data.classification,
       trade: parsed.data.trade,
       hourlyRate: parsed.data.hourlyRate,
-      passwordHash: await hashPassword(parsed.data.password),
+      passwordHash: parsed.data.password ? await hashPassword(parsed.data.password) : null,
       companyId: user.companyId,
+      googleOAuthEnabled: oauthEnabled,
     },
   });
 
@@ -91,9 +116,7 @@ export async function POST(req: Request) {
       where: { id: parsed.data.jobSiteId, companyId: user.companyId },
     });
     if (site) {
-      await prisma.userSite.create({
-        data: { userId: created.id, jobSiteId: site.id },
-      });
+      await prisma.userSite.create({ data: { userId: created.id, jobSiteId: site.id } });
     }
   } else if (user.role === ROLES.SITE_MANAGER) {
     const managerSites = await prisma.userSite.findMany({
@@ -109,5 +132,5 @@ export async function POST(req: Request) {
     }
   }
 
-  return ok({ id: created.id, email: created.email }, { status: 201 });
+  return ok({ id: created.id, email: created.email, googleOAuthEnabled: oauthEnabled }, { status: 201 });
 }

@@ -92,7 +92,7 @@ export default function WorkersPage() {
             </select>
           </div>
           <div><label className="label">Hourly rate (₹)</label><input name="hourlyRate" type="number" min="0" defaultValue="0" className="input" /></div>
-          <div><label className="label">Temporary password</label><input name="password" minLength={8} required className="input" placeholder="min 8 characters" /></div>
+          <div><label className="label">Temporary password</label><input name="password" minLength={8} className="input" placeholder="optional if Google enabled" /></div>
           <div className="sm:col-span-3 flex justify-end">
             <button type="submit" className="btn-primary">Create worker login</button>
           </div>

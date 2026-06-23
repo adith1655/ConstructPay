@@ -47,9 +47,21 @@ const NAV: NavItem[] = [
   },
   {
     href: "/dashboard/inventory",
-    label: "Inventory",
+    label: "Materials",
     icon: "📦",
     roles: [ROLES.ADMIN, ROLES.SITE_MANAGER],
+  },
+  {
+    href: "/dashboard/assets",
+    label: "Assets",
+    icon: "🔧",
+    roles: [ROLES.ADMIN, ROLES.SITE_MANAGER],
+  },
+  {
+    href: "/dashboard/my-assets",
+    label: "My Assets",
+    icon: "🔩",
+    roles: [ROLES.WORKER],
   },
   {
     href: "/dashboard/site-managers",

@@ -22,6 +22,10 @@ export async function POST(req: Request) {
     return error("Invalid credentials.", 401);
   }
 
+  if (!user.passwordHash) {
+    return error("This account uses Google sign-in. Click Verify through Google.", 401);
+  }
+
   const valid = await verifyPassword(password, user.passwordHash);
   if (!valid) return error("Invalid credentials.", 401);
 

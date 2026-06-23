@@ -1,132 +1,84 @@
 # ConstructPay — MVP (India edition)
 
 A full-stack MVP of the **ConstructPay** payroll & workforce data platform for the
-**Indian** construction industry, built from `ConstructPay_PRD_v1_0.md`.
-
-Everything is rupee-first: currency and figures use the Indian numbering system
-(thousand / lakh / crore, e.g. `₹1,23,45,678`), statutory deductions follow Indian
-norms (PF, ESI, Professional Tax, TDS), and the demo data is set in metros like
-**Mumbai** and **New Delhi**.
+**Indian** construction industry.
 
 ## Role hierarchy
 
-ConstructPay is multi-tenant. From the top down:
+| Tier | Role | Scope |
+|------|------|-------|
+| 1 | **Platform Owner** (`SUPER_ADMIN`) | All tenants, subscription approvals |
+| 2 | **Company Admin** (`ADMIN`) | Company team, sites, payroll, assets (view-only), materials |
+| 3 | **Site Manager** (`SITE_MANAGER`) | Assigned sites: crew, assets CRUD, materials, approvals |
+| 4 | **Worker** (`WORKER`) | Own timesheet, pay docs, assigned assets (read-only) |
 
-| Tier | Role | Who | Scope |
-|------|------|-----|-------|
-| 1 | **Platform Owner** (`SUPER_ADMIN`) | The ConstructPay developer/owner — a single account | All subscriber companies, MRR, onboarding |
-| 2 | **Company Admin** (`ADMIN`) | The company that buys a ConstructPay subscription (the tenant) | Their own company: team, sites, payroll, job costing, inventory |
-| 3 | **Site Manager** (`SITE_MANAGER`) | Foreman / site engineer | Assigned job sites: approvals, costing, crew, inventory |
-| 4 | **Worker** (`WORKER`) | On-roll employee or contract labour | Own timesheet, pay slips & documents |
-
-A new company is onboarded only when the **Platform Owner** approves a subscription
-request — this provisions a `Company` tenant plus its first `ADMIN` account.
+New companies are onboarded only when the **Platform Owner** approves a subscription request (max **2 Company Admin seats** per subscription).
 
 ## What's implemented
 
-- **Public landing page** (About, Features, Sign In) with a **Request Access** intake
-  flow that creates a subscription request — never an account.
-- **Auth + RBAC** across the 4 tiers, with JWT sessions in an httpOnly cookie and
-  bcrypt hashing. Every API route enforces role + company scoping server-side.
-- **Platform console** (Owner) — companies/tenants list with plan, MRR, suspend/activate.
-- **Multi-site time tracking** — clock in/out with job-site & cost-code tagging and a
-  geofence-override flag.
-- **Timesheet approvals** — Admin/Site Manager approve or reject; workers can dispute.
-- **Real-time job costing** in ₹ — budget vs. actual labour cost by cost code & project.
-- **Budget audit** — add, update, and remove budget line items (cost codes) with a full
-  audit trail. Site managers can add/update; company admins can also remove lines.
-- **Inventory management** — master catalog, per-site stock, material indents, goods
-  receipt (GRN), and consumption tied to cost codes.
-- **User provisioning**
-  - **Company Admin** → **Site Managers** tab to create foreman logins
-  - **Site Manager** → **Crew / Workers** tab to create worker logins (auto-assigned to their sites)
-  - **Team & Roles** (Admin) — full roster, wage rates, PAN/GSTIN blocking for contractors
-- **Pay & documents** — weekly pay slips with PF/ESI/PT (or TDS) deductions, Form 16/16A.
+- **Request Access** intake (no self-signup) + Platform Owner approval flow
+- **Email/password** and **Google OAuth** (`Verify through Google`) — staged by role
+- **Multi-site time tracking**, approvals, job costing, budget audit
+- **Materials inventory** (indents, GRN, consumption)
+- **Fixed assets** (Asset Tiger-style): CRUD by Site Manager, Admin view-only + edit requests, Worker assigned view
+- **AI bill scanning** (OpenAI Vision) — pre-fills asset forms; consumables routed to expenses table
+- **In-app alerts** for asset maintenance, warranty, idle flags
 
 ## Tech stack
 
-- **Next.js 14** (App Router) + **TypeScript** + **Tailwind CSS**
-- **Prisma ORM** — **SQLite** locally, **PostgreSQL** (Neon) in production (auto-switched)
-- **jose** (JWT) + **bcryptjs** auth, **zod** validation
+- Next.js 14, TypeScript, Tailwind, Prisma (SQLite local / PostgreSQL production)
+- JWT sessions + Google OAuth, zod validation, OpenAI gpt-4o for bill OCR
+
+## Environment variables
+
+Copy `.env.example` to `.env` and set:
+
+| Variable | Purpose |
+|----------|---------|
+| `DATABASE_URL` | SQLite or PostgreSQL connection string |
+| `JWT_SECRET` | Session signing secret |
+| `NEXTAUTH_URL` | App URL (e.g. `http://localhost:3000`) |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth credentials |
+| `SUPER_ADMIN_GOOGLE_EMAIL` | Your Google email — bootstraps Platform Owner on first sign-in |
+| `OPENAI_API_KEY` | Bill scanning OCR |
 
 ## Run locally
 
-### Easiest: double-click `start.bat` (Windows)
-
-It checks Node, installs dependencies, creates `.env`, sets up the database with demo
-data, starts the dev server, and opens the browser.
-
-### Manual
-
 ```bash
-npm install        # also runs prisma generate
-npm run setup      # create DB + seed demo data
-npm run dev        # http://localhost:3000
+npm install
+npm run setup
+npm run dev
 ```
 
-## Demo accounts
+Sign in at `/login` with Google (Platform Owner after setting `SUPER_ADMIN_GOOGLE_EMAIL`) or email/password for provisioned users.
 
-All seeded users share the password **`Password123!`**.
+## First-time Platform Owner setup
 
-| Role | Email |
-|------|-------|
-| Platform Owner | `owner@constructpay.in` |
-| Company Admin (Mumbai) | `admin@sentinelinfra.in` |
-| Site Manager (Mumbai) | `foreman@sentinelinfra.in` |
-| Worker (Mumbai) | `worker@sentinelinfra.in` |
-| Company Admin (Delhi) | `admin@capitalbuildtech.in` |
+1. Set `SUPER_ADMIN_GOOGLE_EMAIL` to your Google account in `.env`
+2. Configure Google OAuth redirect: `http://localhost:3000/api/auth/google/callback`
+3. Run `npm run db:seed` then click **Verify through Google** on `/login`
 
-For the full list (both tenants, all workers, site assignments, and role-specific
-flows), see **[DEMO_ACCOUNTS.md](./DEMO_ACCOUNTS.md)**.
+All other users are created through the subscription approval and provisioning flow (Company Admin → Site Managers → Workers).
 
-## Deploying to GitHub + Vercel
+## Deploying (Vercel + Neon)
 
-This repo is deploy-ready. SQLite cannot persist on Vercel's serverless filesystem,
-so production uses **PostgreSQL** — the Prisma provider switches automatically based
-on `DATABASE_URL` (see `scripts/set-db-provider.mjs`).
+1. Push to GitHub
+2. Create Neon PostgreSQL (pooled connection string)
+3. Set env vars in Vercel: `DATABASE_URL`, `JWT_SECRET`, `NEXTAUTH_URL`, Google OAuth, `SUPER_ADMIN_GOOGLE_EMAIL`, `OPENAI_API_KEY`
+4. Deploy — `vercel-build` runs `db push` + minimal seed
 
-1. **Push to GitHub.** `.env`, `node_modules`, and the local SQLite DB are gitignored.
-2. **Create a Postgres database** — e.g. [Neon](https://neon.tech) (free tier, use the
-   **pooled** connection string) or [Vercel Postgres](https://vercel.com/storage/postgres).
-3. **Import the repo into Vercel** (New Project → import from GitHub).
-4. **Set Environment Variables** in Vercel (Production + Preview):
-   - `DATABASE_URL` = your `postgresql://...?sslmode=require` pooled connection string
-   - `JWT_SECRET` = a long random string
-     (`node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"`)
-5. **Deploy.** Vercel runs the `vercel-build` script, which:
-   `set provider → prisma generate → prisma db push → seed → next build`.
-   The schema and demo data are created on first deploy (the seed is idempotent, so
-   redeploys won't wipe real data).
-
-Connecting a **custom domain** is just Vercel → Project → Settings → Domains; no code
-changes needed (cookies use `secure` + `sameSite=lax` automatically in production).
-
-> Note: the build seeds demo accounts so the deployment is usable immediately. For a
-> real launch, remove the `tsx prisma/seed.ts` step from `vercel-build` and create your
-> own Platform Owner account. See [DEMO_ACCOUNTS.md](./DEMO_ACCOUNTS.md) for what gets seeded.
+For production, remove demo-heavy seeding if you add any; current seed only creates pending access requests and optional Super Admin stub.
 
 ## Scripts
 
-| Script             | Description                                            |
-|--------------------|--------------------------------------------------------|
-| `npm run dev`      | Development server                                     |
-| `npm run build`    | Production build (also type-checks)                    |
-| `npm run setup`    | Provider + generate + db push + seed                   |
-| `npm run db:seed`  | Re-run seed (idempotent upserts)                       |
-| `npm run db:reset` | Wipe and re-seed the database                          |
-
-## Indian statutory model (MVP simplifications)
-
-- **Job-cost burden:** approved labour accrues at `wage × hours × 1.2` (employer PF/ESI/on-costs).
-- **Pay-slip deductions:** PF 12% (employee), ESI 0.75% (if monthly wage < ₹21,000),
-  Professional Tax ₹200/month; contractors deduct 1% TDS (Sec 194C).
-- These are indicative figures for the demo, not certified payroll calculations.
-  Email delivery, PDF/Form 16 generation, and a full statutory engine are out of scope
-  for this MVP.
+| Script | Description |
+|--------|-------------|
+| `npm run dev` | Development server |
+| `npm run build` | Production build |
+| `npm run setup` | DB push + seed |
+| `npm run db:reset` | Wipe and re-seed |
 
 ## Related docs
 
-| File | Description |
-|------|-------------|
-| [DEMO_ACCOUNTS.md](./DEMO_ACCOUNTS.md) | All demo logins, passwords, tenants, and suggested test flows |
-| [ConstructPay_PRD_v1_0.md](./ConstructPay_PRD_v1_0.md) | Product requirements document |
+- [ConstructPay_RoleHierarchy_AssetTiger_Reference (1).md](./ConstructPay_RoleHierarchy_AssetTiger_Reference%20(1).md) — role + asset spec
+- [ConstructPay_PRD_v1_0.md](./ConstructPay_PRD_v1_0.md) — product requirements
