@@ -21,7 +21,7 @@ export default async function DashboardLayout({
     : null;
 
   return (
-    <div className="flex h-screen overflow-hidden bg-steel-50">
+    <div className="flex h-screen overflow-hidden bg-steel-50 dark:bg-steel-950">
       <RolePathGuard role={user.role} />
       <Sidebar role={user.role} />
       <div className="flex flex-1 flex-col overflow-hidden">

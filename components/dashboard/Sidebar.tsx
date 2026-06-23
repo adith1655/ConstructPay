@@ -115,8 +115,8 @@ export function Sidebar({ role }: { role: string }) {
   );
 
   return (
-    <aside className="flex w-60 shrink-0 flex-col border-r border-steel-200 bg-white">
-      <div className="border-b border-steel-200 px-5 py-4">
+    <aside className="flex w-60 shrink-0 flex-col border-r border-steel-200 bg-white dark:border-steel-700 dark:bg-steel-900">
+      <div className="border-b border-steel-200 px-5 py-4 dark:border-steel-700">
         <Link href="/dashboard">
           <Logo />
         </Link>
@@ -133,8 +133,8 @@ export function Sidebar({ role }: { role: string }) {
               href={item.href}
               className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
                 active
-                  ? "bg-brand-50 text-brand-700"
-                  : "text-steel-600 hover:bg-steel-100 hover:text-steel-900"
+                  ? "bg-brand-50 text-brand-700 dark:bg-brand-900/50 dark:text-brand-400"
+                  : "text-steel-600 hover:bg-steel-100 hover:text-steel-900 dark:text-steel-400 dark:hover:bg-steel-800 dark:hover:text-steel-100"
               }`}
             >
               <span className="w-4 text-center text-base">{item.icon}</span>
@@ -143,7 +143,7 @@ export function Sidebar({ role }: { role: string }) {
           );
         })}
       </nav>
-      <div className="border-t border-steel-200 px-5 py-3 text-xs text-steel-400">
+      <div className="border-t border-steel-200 px-5 py-3 text-xs text-steel-400 dark:border-steel-700">
         {ROLE_LABELS[role] ?? role}
       </div>
     </aside>

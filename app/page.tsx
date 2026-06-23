@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Logo } from "@/components/Logo";
 import { RequestAccessModal } from "@/components/RequestAccessModal";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 const FEATURES = [
   {
@@ -42,20 +43,21 @@ export default function LandingPage() {
   const [modalOpen, setModalOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-white dark:bg-steel-950">
       {/* Header */}
-      <header className="sticky top-0 z-40 border-b border-steel-200 bg-white/90 backdrop-blur">
+      <header className="sticky top-0 z-40 border-b border-steel-200 bg-white/90 backdrop-blur dark:border-steel-700 dark:bg-steel-900/90">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3.5">
           <Logo />
-          <nav className="hidden items-center gap-8 text-sm font-medium text-steel-600 md:flex">
-            <a href="#about" className="hover:text-steel-900">
+          <nav className="hidden items-center gap-8 text-sm font-medium text-steel-600 dark:text-steel-400 md:flex">
+            <a href="#about" className="hover:text-steel-900 dark:hover:text-steel-100">
               About Us
             </a>
-            <a href="#features" className="hover:text-steel-900">
+            <a href="#features" className="hover:text-steel-900 dark:hover:text-steel-100">
               Features We Offer
             </a>
           </nav>
           <div className="flex items-center gap-2">
+            <ThemeToggle />
             <Link href="/login" className="btn-secondary">
               Sign In
             </Link>
@@ -119,7 +121,7 @@ export default function LandingPage() {
         <div className="mt-12 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {FEATURES.map((f) => (
             <div key={f.title} className="card p-6 transition hover:shadow-md">
-              <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-brand-50 text-2xl">
+              <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-brand-50 text-2xl dark:bg-brand-900/50">
                 {f.icon}
               </div>
               <h3 className="mt-4 text-lg font-semibold text-steel-900">
@@ -134,7 +136,7 @@ export default function LandingPage() {
       </section>
 
       {/* About */}
-      <section id="about" className="border-y border-steel-200 bg-steel-50">
+      <section id="about" className="border-y border-steel-200 bg-steel-50 dark:border-steel-700 dark:bg-steel-900">
         <div className="mx-auto grid max-w-6xl items-center gap-10 px-4 py-20 lg:grid-cols-2">
           <div>
             <h2 className="text-3xl font-bold tracking-tight text-steel-900">

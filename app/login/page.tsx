@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Logo } from "@/components/Logo";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 function LoginForm() {
   const router = useRouter();
@@ -83,7 +84,7 @@ function LoginForm() {
             <div className="w-full border-t border-steel-200" />
           </div>
           <div className="relative flex justify-center text-xs uppercase">
-            <span className="bg-white px-2 text-steel-400">or</span>
+            <span className="bg-white px-2 text-steel-400 dark:bg-steel-900 dark:text-steel-500">or</span>
           </div>
         </div>
 
@@ -97,15 +98,18 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <div className="flex min-h-screen flex-col bg-steel-50">
-      <header className="border-b border-steel-200 bg-white">
+    <div className="flex min-h-screen flex-col bg-steel-50 dark:bg-steel-950">
+      <header className="border-b border-steel-200 bg-white dark:border-steel-700 dark:bg-steel-900">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3.5">
           <Link href="/">
             <Logo />
           </Link>
-          <Link href="/" className="text-sm font-medium text-steel-600 hover:text-steel-900">
-            ← Back to site
-          </Link>
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <Link href="/" className="text-sm font-medium text-steel-600 hover:text-steel-900 dark:text-steel-400 dark:hover:text-steel-100">
+              ← Back to site
+            </Link>
+          </div>
         </div>
       </header>
 

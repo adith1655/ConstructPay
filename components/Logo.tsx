@@ -28,8 +28,12 @@ export function Logo({
         <path d="M13 21v-5h6v5" stroke="white" strokeWidth="2" strokeLinecap="round" />
       </svg>
       {showText && (
-        <span className={`text-lg font-bold tracking-tight ${textClassName}`}>
-          Construct<span className="text-brand-600">Pay</span>
+        <span
+          className={`text-lg font-bold tracking-tight ${
+            textClassName || "text-steel-900 dark:text-steel-100"
+          }`}
+        >
+          Construct<span className="text-brand-600 dark:text-brand-500">Pay</span>
         </span>
       )}
     </div>

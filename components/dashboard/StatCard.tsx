@@ -11,12 +11,12 @@ export function StatCard({
 }) {
   const accentColor =
     {
-      brand: "text-brand-600",
-      emerald: "text-emerald-600",
-      amber: "text-amber-600",
-      red: "text-red-600",
-      steel: "text-steel-900",
-    }[accent ?? "steel"] ?? "text-steel-900";
+      brand: "text-brand-600 dark:text-brand-400",
+      emerald: "text-emerald-600 dark:text-emerald-400",
+      amber: "text-amber-600 dark:text-amber-400",
+      red: "text-red-600 dark:text-red-400",
+      steel: "text-steel-900 dark:text-steel-100",
+    }[accent ?? "steel"] ?? "text-steel-900 dark:text-steel-100";
 
   return (
     <div className="card p-5">

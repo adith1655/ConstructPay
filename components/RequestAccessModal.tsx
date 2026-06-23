@@ -77,7 +77,7 @@ export function RequestAccessModal({
               </div>
               <button
                 onClick={onClose}
-                className="rounded-md p-1 text-steel-400 hover:bg-steel-100"
+                className="rounded-md p-1 text-steel-400 hover:bg-steel-100 dark:hover:bg-steel-800"
                 aria-label="Close"
               >
                 ✕

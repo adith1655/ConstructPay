@@ -13,21 +13,25 @@ body {
 }
 
 body {
-  @apply bg-steel-50 text-steel-800 antialiased;
+  @apply bg-steel-50 text-steel-800 antialiased transition-colors duration-200;
+}
+
+.dark body {
+  @apply bg-steel-950 text-steel-200;
 }
 
 @layer components {
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60;
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:focus:ring-offset-steel-900;
   }
   .btn-primary {
     @apply btn bg-brand-600 text-white hover:bg-brand-700 focus:ring-brand-500;
   }
   .btn-secondary {
-    @apply btn border border-steel-300 bg-white text-steel-700 hover:bg-steel-100 focus:ring-steel-400;
+    @apply btn border border-steel-300 bg-white text-steel-700 hover:bg-steel-100 focus:ring-steel-400 dark:border-steel-600 dark:bg-steel-800 dark:text-steel-200 dark:hover:bg-steel-700;
   }
   .btn-ghost {
-    @apply btn text-steel-600 hover:bg-steel-100;
+    @apply btn text-steel-600 hover:bg-steel-100 dark:text-steel-300 dark:hover:bg-steel-800;
   }
   .btn-danger {
     @apply btn bg-red-600 text-white hover:bg-red-700 focus:ring-red-500;
@@ -36,15 +40,106 @@ body {
     @apply btn bg-emerald-600 text-white hover:bg-emerald-700 focus:ring-emerald-500;
   }
   .input {
-    @apply w-full rounded-lg border border-steel-300 bg-white px-3.5 py-2.5 text-sm text-steel-800 shadow-sm placeholder:text-steel-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500;
+    @apply w-full rounded-lg border border-steel-300 bg-white px-3.5 py-2.5 text-sm text-steel-800 shadow-sm placeholder:text-steel-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 dark:border-steel-600 dark:bg-steel-900 dark:text-steel-100 dark:placeholder:text-steel-500;
   }
   .label {
-    @apply mb-1.5 block text-sm font-medium text-steel-700;
+    @apply mb-1.5 block text-sm font-medium text-steel-700 dark:text-steel-300;
   }
   .card {
-    @apply rounded-xl border border-steel-200 bg-white shadow-sm;
+    @apply rounded-xl border border-steel-200 bg-white shadow-sm dark:border-steel-700 dark:bg-steel-900;
   }
   .badge {
     @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold;
+  }
+}
+
+/* Retrofit common utility classes for dashboard pages */
+@layer utilities {
+  .dark .text-steel-900 {
+    @apply text-steel-100;
+  }
+  .dark .text-steel-800 {
+    @apply text-steel-200;
+  }
+  .dark .text-steel-700 {
+    @apply text-steel-300;
+  }
+  .dark .text-steel-600 {
+    @apply text-steel-400;
+  }
+  .dark .text-steel-500 {
+    @apply text-steel-400;
+  }
+
+  .dark .bg-white {
+    @apply bg-steel-900;
+  }
+  .dark .bg-steel-50 {
+    @apply bg-steel-950;
+  }
+  .dark .bg-steel-100 {
+    @apply bg-steel-800;
+  }
+
+  .dark .border-steel-200 {
+    @apply border-steel-700;
+  }
+  .dark .border-steel-300 {
+    @apply border-steel-600;
+  }
+
+  .dark .divide-steel-100 > :not([hidden]) ~ :not([hidden]) {
+    @apply border-steel-800;
+  }
+  .dark .divide-steel-200 > :not([hidden]) ~ :not([hidden]) {
+    @apply border-steel-700;
+  }
+
+  .dark .hover\:bg-steel-100:hover {
+    @apply bg-steel-800;
+  }
+  .dark .hover\:text-steel-900:hover {
+    @apply text-steel-100;
+  }
+
+  .dark .bg-red-50 {
+    @apply bg-red-950/40;
+  }
+  .dark .text-red-700 {
+    @apply text-red-400;
+  }
+  .dark .bg-emerald-50 {
+    @apply bg-emerald-950/40;
+  }
+  .dark .text-emerald-700,
+  .dark .text-emerald-800 {
+    @apply text-emerald-400;
+  }
+  .dark .bg-brand-50 {
+    @apply bg-brand-900/50;
+  }
+  .dark .text-brand-700 {
+    @apply text-brand-400;
+  }
+  .dark .bg-blue-50 {
+    @apply bg-blue-950/40;
+  }
+  .dark .text-blue-700 {
+    @apply text-blue-400;
+  }
+  .dark .bg-amber-50 {
+    @apply bg-amber-950/40;
+  }
+  .dark .text-amber-700 {
+    @apply text-amber-400;
+  }
+  .dark .bg-orange-50 {
+    @apply bg-orange-950/40;
+  }
+  .dark .text-orange-700 {
+    @apply text-orange-400;
+  }
+  .dark .bg-emerald-100 {
+    @apply bg-emerald-950/50;
   }
 }
