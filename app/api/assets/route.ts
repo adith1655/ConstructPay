@@ -40,7 +40,7 @@ function parseDate(v: string | null | undefined) {
 }
 
 export async function GET(req: Request) {
-  const { user, response } = await authorize([...MANAGER_ROLES, ROLES.WORKER]);
+  const { user, response } = await authorize([...MANAGER_ROLES, ROLES.WORKER, ROLES.SUPER_ADMIN]);
   if (!user) return response;
 
   const { searchParams } = new URL(req.url);
@@ -55,10 +55,22 @@ export async function GET(req: Request) {
     return ok({ assets: assignments.map((a) => a.asset) });
   }
 
+  if (user.role === ROLES.SUPER_ADMIN) {
+    const assets = await prisma.fixedAsset.findMany({
+      where: includeRetired ? {} : { retiredAt: null },
+      include: {
+        ...assetInclude,
+        company: { select: { name: true } },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 200,
+    });
+    return ok({ assets, readOnly: true });
+  }
+
   if (!user.companyId) return ok({ assets: [] });
 
   let siteFilter: { jobSiteId?: string; jobSite?: object } = {};
-  if (siteId) siteFilter = { jobSiteId: siteId };
   if (user.role === ROLES.SITE_MANAGER) {
     siteFilter = {
       jobSite: {

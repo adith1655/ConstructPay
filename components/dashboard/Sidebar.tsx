@@ -55,7 +55,19 @@ const NAV: NavItem[] = [
     href: "/dashboard/assets",
     label: "Assets",
     icon: "🔧",
+    roles: [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.SITE_MANAGER],
+  },
+  {
+    href: "/dashboard/expenses",
+    label: "Expenses",
+    icon: "🧾",
     roles: [ROLES.ADMIN, ROLES.SITE_MANAGER],
+  },
+  {
+    href: "/dashboard/sites",
+    label: "Job Sites",
+    icon: "📍",
+    roles: [ROLES.ADMIN],
   },
   {
     href: "/dashboard/my-assets",

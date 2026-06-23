@@ -36,6 +36,22 @@ export default function RequestsPage() {
     load();
   }, [load]);
 
+  async function remove(id: string, businessName: string, status: string) {
+    const msg =
+      status === "APPROVED"
+        ? `Remove "${businessName}" from the list and permanently delete its company tenant and all data from the database?`
+        : `Remove this subscription request for "${businessName}"?`;
+    if (!confirm(msg)) return;
+    setBusyId(id);
+    const res = await fetch(`/api/access-requests/${id}`, { method: "DELETE" });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      alert(data.error || "Could not remove.");
+    }
+    await load();
+    setBusyId(null);
+  }
+
   async function act(id: string, action: "APPROVE" | "DENY") {
     setBusyId(id);
     setNotice(null);
@@ -111,12 +127,21 @@ export default function RequestsPage() {
           </div>
           <div className="divide-y divide-steel-100">
             {processed.map((r) => (
-              <div key={r.id} className="flex items-center justify-between px-5 py-3.5">
+              <div key={r.id} className="flex items-center justify-between gap-3 px-5 py-3.5">
                 <div>
                   <div className="font-medium text-steel-900">{r.fullName} · {r.businessName}</div>
                   <div className="text-xs text-steel-500">{r.email} · {dateShort(r.createdAt)}</div>
                 </div>
-                <StatusBadge status={r.status} />
+                <div className="flex shrink-0 items-center gap-2">
+                  <StatusBadge status={r.status} />
+                  <button
+                    onClick={() => remove(r.id, r.businessName, r.status)}
+                    disabled={busyId === r.id}
+                    className="btn-danger px-3 py-1.5 text-xs"
+                  >
+                    {busyId === r.id ? "Removing…" : "Remove"}
+                  </button>
+                </div>
               </div>
             ))}
           </div>

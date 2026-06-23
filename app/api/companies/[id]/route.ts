@@ -38,3 +38,24 @@ export async function PATCH(
 
   return ok({ company: updated });
 }
+
+export async function DELETE(
+  _req: Request,
+  { params }: { params: { id: string } }
+) {
+  const { user, response } = await authorize([ROLES.SUPER_ADMIN]);
+  if (!user) return response;
+
+  const company = await prisma.company.findUnique({
+    where: { id: params.id },
+    select: { id: true, name: true },
+  });
+  if (!company) return error("Company not found.", 404);
+
+  await prisma.$transaction(async (tx) => {
+    await tx.user.deleteMany({ where: { companyId: company.id } });
+    await tx.company.delete({ where: { id: company.id } });
+  });
+
+  return ok({ deleted: true, name: company.name });
+}

@@ -20,6 +20,7 @@ type Company = {
 export default function CompaniesPage() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const res = await fetch("/api/companies");
@@ -31,6 +32,20 @@ export default function CompaniesPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  async function remove(id: string, name: string) {
+    if (!confirm(`Permanently delete "${name}" and all its users, sites, assets, and data? This cannot be undone.`)) {
+      return;
+    }
+    setDeletingId(id);
+    const res = await fetch(`/api/companies/${id}`, { method: "DELETE" });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      alert(data.error || "Could not delete company.");
+    }
+    setDeletingId(null);
+    await load();
+  }
 
   async function patch(id: string, body: Record<string, unknown>) {
     await fetch(`/api/companies/${id}`, {
@@ -77,7 +92,7 @@ export default function CompaniesPage() {
               Admin: {c.admin ? `${c.admin.fullName} (${c.admin.email})` : "—"}
             </div>
 
-            <div className="mt-4 flex items-center justify-between">
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <select
                   value={c.plan}
@@ -89,12 +104,21 @@ export default function CompaniesPage() {
                 </select>
                 <span className="text-sm font-semibold text-steel-900">{currency(c.monthlyFee)}/mo</span>
               </div>
-              <button
-                onClick={() => patch(c.id, { active: !c.active })}
-                className={c.active ? "btn-secondary px-3 py-1.5 text-xs" : "btn-success px-3 py-1.5 text-xs"}
-              >
-                {c.active ? "Suspend" : "Activate"}
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => patch(c.id, { active: !c.active })}
+                  className={c.active ? "btn-secondary px-3 py-1.5 text-xs" : "btn-success px-3 py-1.5 text-xs"}
+                >
+                  {c.active ? "Suspend" : "Activate"}
+                </button>
+                <button
+                  onClick={() => remove(c.id, c.name)}
+                  disabled={deletingId === c.id}
+                  className="btn-danger px-3 py-1.5 text-xs"
+                >
+                  {deletingId === c.id ? "Deleting…" : "Delete"}
+                </button>
+              </div>
             </div>
           </div>
         ))}

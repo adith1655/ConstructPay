@@ -57,6 +57,8 @@ const emptyForm = {
   serialNo: "",
   photoUrl: "",
   sourceBillUrl: "",
+  maintenanceDueDate: "",
+  warrantyExpiryDate: "",
 };
 
 export default function AssetsPage() {
@@ -72,12 +74,16 @@ export default function AssetsPage() {
   const [draftIndex, setDraftIndex] = useState(0);
   const [showForm, setShowForm] = useState(false);
   const [selected, setSelected] = useState<Asset | null>(null);
-  const [editPayload, setEditPayload] = useState("");
   const [pendingEdits, setPendingEdits] = useState<EditRequest[]>([]);
   const [notifications, setNotifications] = useState<{ id: string; title: string; body: string; read: boolean }[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [auditLogs, setAuditLogs] = useState<{ action: string; createdAt: string; performer: { fullName: string } }[]>([]);
+  const [workers, setWorkers] = useState<{ id: string; fullName: string }[]>([]);
+  const [assignWorkerId, setAssignWorkerId] = useState("");
+  const [adminEdit, setAdminEdit] = useState({ description: "", cost: "" });
 
   const loadLookups = useCallback(async () => {
     const [l, c, d] = await Promise.all([
@@ -122,8 +128,32 @@ export default function AssetsPage() {
       fetch("/api/assets/edit-requests")
         .then((r) => r.json())
         .then((d) => setPendingEdits(d.requests ?? []));
+      fetch("/api/users?role=WORKER")
+        .then((r) => r.json())
+        .then((d) => setWorkers(d.users ?? []));
     }
   }, [role]);
+
+  useEffect(() => {
+    if (!selected) {
+      setAuditLogs([]);
+      return;
+    }
+    fetch(`/api/assets/${selected.id}`)
+      .then((r) => r.json())
+      .then((d) => {
+        setAuditLogs(d.asset?.auditLogs ?? []);
+        if (role === ROLES.ADMIN) {
+          setAdminEdit({ description: selected.description, cost: String(selected.cost) });
+        }
+      });
+  }, [selected, role]);
+
+  async function generateTag() {
+    const res = await fetch("/api/assets/generate-tag");
+    const data = await res.json();
+    if (data.tag) setForm((f) => ({ ...f, assetTagId: data.tag }));
+  }
 
   function applyDraft(draft: Draft) {
     setForm({
@@ -223,19 +253,79 @@ export default function AssetsPage() {
     await load();
   }
 
-  async function requestEdit() {
-    if (!selected || !editPayload.trim()) return;
-    let payload: Record<string, unknown>;
-    try {
-      payload = JSON.parse(editPayload);
-    } catch {
-      setError("Edit payload must be valid JSON.");
+  async function updateAsset(e: React.FormEvent) {
+    e.preventDefault();
+    if (!selected) return;
+    setError(null);
+    const res = await fetch(`/api/assets/${selected.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...form,
+        cost: Number(form.cost),
+        locationId: form.locationId || null,
+        categoryId: form.categoryId || null,
+        departmentId: form.departmentId || null,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setError(data.error || "Could not update asset.");
       return;
     }
+    setSuccess("Asset updated.");
+    setEditing(false);
+    await load();
+    setSelected(data.asset);
+  }
+
+  function startEdit() {
+    if (!selected) return;
+    setForm({
+      jobSiteId: selected.jobSite.id,
+      locationId: selected.location?.id ?? "",
+      categoryId: selected.category?.id ?? "",
+      departmentId: selected.department?.id ?? "",
+      description: selected.description,
+      assetTagId: selected.assetTagId,
+      purchaseDate: "",
+      purchasedFrom: "",
+      cost: String(selected.cost),
+      brand: selected.brand,
+      model: selected.model,
+      serialNo: selected.serialNo,
+      photoUrl: selected.photoUrl ?? "",
+      sourceBillUrl: "",
+      maintenanceDueDate: "",
+      warrantyExpiryDate: "",
+    });
+    setEditing(true);
+    setShowForm(false);
+  }
+
+  async function assignWorker() {
+    if (!selected || !assignWorkerId) return;
+    await fetch("/api/assets/assignments", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ assetId: selected.id, userId: assignWorkerId }),
+    });
+    setSuccess("Worker assigned to asset.");
+    setAssignWorkerId("");
+  }
+
+  async function requestEdit() {
+    if (!selected) return;
     const res = await fetch("/api/assets/edit-requests", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ assetId: selected.id, payload }),
+      body: JSON.stringify({
+        assetId: selected.id,
+        payload: {
+          description: adminEdit.description,
+          cost: Number(adminEdit.cost),
+        },
+      }),
     });
     if (!res.ok) {
       const d = await res.json();
@@ -243,7 +333,6 @@ export default function AssetsPage() {
       return;
     }
     setSuccess("Edit request sent to site manager.");
-    setEditPayload("");
   }
 
   async function resolveEdit(id: string, action: "APPLY" | "REJECT") {
@@ -260,6 +349,7 @@ export default function AssetsPage() {
 
   const isSiteManager = role === ROLES.SITE_MANAGER;
   const isAdmin = role === ROLES.ADMIN;
+  const isSuperAdmin = role === ROLES.SUPER_ADMIN;
 
   return (
     <div className="space-y-6">
@@ -267,7 +357,9 @@ export default function AssetsPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-steel-900">Fixed Assets</h1>
           <p className="mt-1 text-sm text-steel-500">
-            {isAdmin
+            {isSuperAdmin
+              ? "Platform-wide read-only view of all tenant assets."
+              : isAdmin
               ? "View-only across all sites. Request edits routed to site managers."
               : "Manage equipment and tools at your job sites."}
           </p>
@@ -353,7 +445,10 @@ export default function AssetsPage() {
             </div>
             <div>
               <label className="label">Asset Tag ID *</label>
-              <input required className="input" value={form.assetTagId} onChange={(e) => setForm({ ...form, assetTagId: e.target.value })} />
+              <div className="flex gap-2">
+                <input required className="input flex-1" value={form.assetTagId} onChange={(e) => setForm({ ...form, assetTagId: e.target.value })} />
+                <button type="button" onClick={generateTag} className="btn-secondary text-xs shrink-0">Auto</button>
+              </div>
             </div>
             <div>
               <label className="label">Purchase Date</label>
@@ -383,8 +478,38 @@ export default function AssetsPage() {
               <label className="label">Photo (JPG/PNG/GIF)</label>
               <input type="file" accept="image/jpeg,image/png,image/gif" className="input" onChange={(e) => e.target.files?.[0] && uploadPhoto(e.target.files[0])} />
             </div>
+            <div>
+              <label className="label">Maintenance due</label>
+              <input type="date" className="input" value={form.maintenanceDueDate} onChange={(e) => setForm({ ...form, maintenanceDueDate: e.target.value })} />
+            </div>
+            <div>
+              <label className="label">Warranty expiry</label>
+              <input type="date" className="input" value={form.warrantyExpiryDate} onChange={(e) => setForm({ ...form, warrantyExpiryDate: e.target.value })} />
+            </div>
           </div>
           <button type="submit" className="btn-primary">Submit asset</button>
+        </form>
+      )}
+
+      {editing && isSiteManager && selected && (
+        <form onSubmit={updateAsset} className="card space-y-4 p-5">
+          <h2 className="font-semibold text-steel-900">Edit Asset — {selected.assetTagId}</h2>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <label className="label">Description *</label>
+              <input required className="input" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+            </div>
+            <div>
+              <label className="label">Cost (₹)</label>
+              <input type="number" min="0" className="input" value={form.cost} onChange={(e) => setForm({ ...form, cost: e.target.value })} />
+            </div>
+            <LookupField label="Location" value={form.locationId} items={locations} onChange={(v) => setForm({ ...form, locationId: v })} onAdd={() => addLookup("locations")} />
+            <LookupField label="Category" value={form.categoryId} items={categories} onChange={(v) => setForm({ ...form, categoryId: v })} onAdd={() => addLookup("categories")} />
+          </div>
+          <div className="flex gap-2">
+            <button type="submit" className="btn-primary">Save changes</button>
+            <button type="button" onClick={() => setEditing(false)} className="btn-secondary">Cancel</button>
+          </div>
         </form>
       )}
 
@@ -431,13 +556,37 @@ export default function AssetsPage() {
               <div><dt className="inline font-medium">Location: </dt>{selected.location?.name ?? "—"}</div>
             </dl>
             {isSiteManager && !readOnly && (
-              <button onClick={() => retireAsset(selected.id)} className="btn-danger mt-4 w-full text-xs">Retire asset</button>
+              <div className="mt-4 space-y-2">
+                <button onClick={startEdit} className="btn-secondary w-full text-xs">Edit asset</button>
+                <button onClick={() => retireAsset(selected.id)} className="btn-danger w-full text-xs">Retire asset</button>
+                <label className="label">Assign to worker</label>
+                <div className="flex gap-2">
+                  <select className="input flex-1" value={assignWorkerId} onChange={(e) => setAssignWorkerId(e.target.value)}>
+                    <option value="">Select worker…</option>
+                    {workers.map((w) => (
+                      <option key={w.id} value={w.id}>{w.fullName}</option>
+                    ))}
+                  </select>
+                  <button type="button" onClick={assignWorker} className="btn-secondary text-xs">Assign</button>
+                </div>
+              </div>
             )}
             {isAdmin && (
               <div className="mt-4 space-y-2">
-                <label className="label">Request edit (JSON)</label>
-                <textarea className="input min-h-[80px] font-mono text-xs" value={editPayload} onChange={(e) => setEditPayload(e.target.value)} placeholder='{"description":"Updated name","cost":50000}' />
+                <label className="label">Request edit</label>
+                <input className="input" value={adminEdit.description} onChange={(e) => setAdminEdit({ ...adminEdit, description: e.target.value })} placeholder="Description" />
+                <input className="input" type="number" value={adminEdit.cost} onChange={(e) => setAdminEdit({ ...adminEdit, cost: e.target.value })} placeholder="Cost (₹)" />
                 <button onClick={requestEdit} className="btn-secondary w-full text-xs">Send to site manager</button>
+              </div>
+            )}
+            {auditLogs.length > 0 && (
+              <div className="mt-4 border-t border-steel-100 pt-3">
+                <h3 className="text-xs font-semibold uppercase text-steel-500">Audit trail</h3>
+                <ul className="mt-2 max-h-32 space-y-1 overflow-y-auto text-xs text-steel-500">
+                  {auditLogs.map((log, i) => (
+                    <li key={i}>{log.action} · {log.performer.fullName} · {new Date(log.createdAt).toLocaleString("en-IN")}</li>
+                  ))}
+                </ul>
               </div>
             )}
           </div>
