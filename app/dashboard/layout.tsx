@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import { Header } from "@/components/dashboard/Header";
+import { RolePathGuard } from "@/components/dashboard/RolePathGuard";
 
 export default async function DashboardLayout({
   children,
@@ -21,6 +22,7 @@ export default async function DashboardLayout({
 
   return (
     <div className="flex h-screen overflow-hidden bg-steel-50">
+      <RolePathGuard role={user.role} />
       <Sidebar role={user.role} />
       <div className="flex flex-1 flex-col overflow-hidden">
         <Header

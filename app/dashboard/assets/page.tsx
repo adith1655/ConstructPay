@@ -349,7 +349,6 @@ export default function AssetsPage() {
 
   const isSiteManager = role === ROLES.SITE_MANAGER;
   const isAdmin = role === ROLES.ADMIN;
-  const isSuperAdmin = role === ROLES.SUPER_ADMIN;
 
   return (
     <div className="space-y-6">
@@ -357,9 +356,7 @@ export default function AssetsPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-steel-900">Fixed Assets</h1>
           <p className="mt-1 text-sm text-steel-500">
-            {isSuperAdmin
-              ? "Platform-wide read-only view of all tenant assets."
-              : isAdmin
+            {isAdmin
               ? "View-only across all sites. Request edits routed to site managers."
               : "Manage equipment and tools at your job sites."}
           </p>

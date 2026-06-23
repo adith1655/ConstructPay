@@ -13,18 +13,6 @@ export async function GET() {
   const { user, response } = await authorize();
   if (!user) return response;
 
-  if (user.role === ROLES.SUPER_ADMIN) {
-    const sites = await prisma.jobSite.findMany({
-      where: { active: true },
-      orderBy: { name: "asc" },
-      include: {
-        company: { select: { name: true } },
-        costCodes: { select: { id: true, code: true, description: true } },
-      },
-    });
-    return ok({ sites });
-  }
-
   if (!user.companyId) return ok({ sites: [] });
 
   const where =
