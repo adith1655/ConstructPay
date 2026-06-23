@@ -17,20 +17,39 @@ type Company = {
   projectCount: number;
 };
 
+type ProvisionNotice = { businessName: string; tempPassword: string };
+
 export default function CompaniesPage() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [notice, setNotice] = useState<ProvisionNotice | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const res = await fetch("/api/companies");
-    const data = await res.json();
-    setCompanies(data.companies ?? []);
+    setLoadError(null);
+    const res = await fetch("/api/companies", { cache: "no-store" });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setLoadError(data.error || "Could not load companies.");
+      setCompanies([]);
+    } else {
+      setCompanies(data.companies ?? []);
+    }
     setLoading(false);
   }, []);
 
   useEffect(() => {
     load();
+    const raw = sessionStorage.getItem("constructpay-provisioned");
+    if (raw) {
+      try {
+        setNotice(JSON.parse(raw) as ProvisionNotice);
+      } catch {
+        /* ignore */
+      }
+      sessionStorage.removeItem("constructpay-provisioned");
+    }
   }, [load]);
 
   async function remove(id: string, name: string) {
@@ -69,6 +88,22 @@ export default function CompaniesPage() {
         </p>
       </div>
 
+      {notice && (
+        <div className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          <strong>{notice.businessName}</strong> is now a subscriber company. Admin temporary password
+          (would be emailed): <code className="font-mono">{notice.tempPassword}</code>
+        </div>
+      )}
+
+      {loadError && (
+        <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{loadError}</div>
+      )}
+
+      {companies.length === 0 ? (
+        <div className="card px-5 py-12 text-center text-sm text-steel-500">
+          No subscriber companies yet. Approve a subscription request to provision the first tenant.
+        </div>
+      ) : (
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {companies.map((c) => (
           <div key={c.id} className="card p-5">
@@ -123,6 +158,7 @@ export default function CompaniesPage() {
           </div>
         ))}
       </div>
+      )}
     </div>
   );
 }

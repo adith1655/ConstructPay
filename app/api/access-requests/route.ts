@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { ok, error, authorize } from "@/lib/api";
-import { ROLES } from "@/lib/constants";
+import { ROLES, REQUEST_STATUS } from "@/lib/constants";
 
 const createSchema = z.object({
   fullName: z.string().min(1),
@@ -36,6 +36,7 @@ export async function GET() {
   if (!user) return response;
 
   const requests = await prisma.accessRequest.findMany({
+    where: { status: { not: REQUEST_STATUS.APPROVED } },
     orderBy: { createdAt: "desc" },
   });
   return ok({ requests });

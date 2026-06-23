@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { StatusBadge } from "@/components/dashboard/StatusBadge";
 import { ROLE_LABELS } from "@/lib/constants";
 import { dateShort } from "@/lib/format";
@@ -20,13 +21,14 @@ type Request = {
 };
 
 export default function RequestsPage() {
+  const router = useRouter();
   const [requests, setRequests] = useState<Request[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const res = await fetch("/api/access-requests");
+    const res = await fetch("/api/access-requests", { cache: "no-store" });
     const data = await res.json();
     setRequests(data.requests ?? []);
     setLoading(false);
@@ -36,12 +38,8 @@ export default function RequestsPage() {
     load();
   }, [load]);
 
-  async function remove(id: string, businessName: string, status: string) {
-    const msg =
-      status === "APPROVED"
-        ? `Remove "${businessName}" from the list and permanently delete its company tenant and all data from the database?`
-        : `Remove this subscription request for "${businessName}"?`;
-    if (!confirm(msg)) return;
+  async function remove(id: string, businessName: string) {
+    if (!confirm(`Remove this denied subscription request for "${businessName}"?`)) return;
     setBusyId(id);
     const res = await fetch(`/api/access-requests/${id}`, { method: "DELETE" });
     if (!res.ok) {
@@ -54,15 +52,28 @@ export default function RequestsPage() {
 
   async function act(id: string, action: "APPROVE" | "DENY") {
     setBusyId(id);
-    setNotice(null);
+    setError(null);
     const res = await fetch(`/api/access-requests/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action }),
     });
     const data = await res.json().catch(() => ({}));
-    if (res.ok && data.tempPassword) {
-      setNotice(`Company tenant + Admin account provisioned. Temporary password (would be emailed): ${data.tempPassword}`);
+    if (!res.ok) {
+      setError(data.error || "Could not process request.");
+      setBusyId(null);
+      return;
+    }
+    if (action === "APPROVE") {
+      sessionStorage.setItem(
+        "constructpay-provisioned",
+        JSON.stringify({
+          businessName: data.businessName,
+          tempPassword: data.tempPassword,
+        })
+      );
+      router.push("/dashboard/companies");
+      return;
     }
     await load();
     setBusyId(null);
@@ -71,19 +82,19 @@ export default function RequestsPage() {
   if (loading) return <div className="text-sm text-steel-500">Loading…</div>;
 
   const pending = requests.filter((r) => r.status === "PENDING");
-  const processed = requests.filter((r) => r.status !== "PENDING");
+  const denied = requests.filter((r) => r.status === "DENIED");
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-steel-900">Subscription Requests</h1>
         <p className="mt-1 text-sm text-steel-500">
-          Businesses are never self-onboarded. Approving a request provisions a new company tenant and its Admin account.
+          Businesses are never self-onboarded. Approving provisions a company tenant and sends you to the Companies tab.
         </p>
       </div>
 
-      {notice && (
-        <div className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{notice}</div>
+      {error && (
+        <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
       )}
 
       <div className="card">
@@ -120,13 +131,13 @@ export default function RequestsPage() {
         )}
       </div>
 
-      {processed.length > 0 && (
+      {denied.length > 0 && (
         <div className="card">
           <div className="border-b border-steel-200 px-5 py-4">
-            <h2 className="font-semibold text-steel-900">Processed</h2>
+            <h2 className="font-semibold text-steel-900">Denied</h2>
           </div>
           <div className="divide-y divide-steel-100">
-            {processed.map((r) => (
+            {denied.map((r) => (
               <div key={r.id} className="flex items-center justify-between gap-3 px-5 py-3.5">
                 <div>
                   <div className="font-medium text-steel-900">{r.fullName} · {r.businessName}</div>
@@ -135,7 +146,7 @@ export default function RequestsPage() {
                 <div className="flex shrink-0 items-center gap-2">
                   <StatusBadge status={r.status} />
                   <button
-                    onClick={() => remove(r.id, r.businessName, r.status)}
+                    onClick={() => remove(r.id, r.businessName)}
                     disabled={busyId === r.id}
                     className="btn-danger px-3 py-1.5 text-xs"
                   >

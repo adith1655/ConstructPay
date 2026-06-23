@@ -1,9 +1,10 @@
+export const dynamic = "force-dynamic";
+
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { ok, error, authorize } from "@/lib/api";
 import { ROLES, REQUEST_STATUS } from "@/lib/constants";
 import { hashPassword } from "@/lib/auth";
-import { googleEnabledForNewUser } from "@/lib/oauth-cascade";
 
 const patchSchema = z.object({
   action: z.enum(["APPROVE", "DENY"]),
@@ -49,66 +50,75 @@ export async function PATCH(
   if (existingCompany) return error("A company with this name already exists.");
 
   const temp = tempPassword();
-  await prisma.$transaction(async (tx) => {
-    const company = await tx.company.create({
-      data: {
-        name: request.businessName,
-        city: request.city || "Mumbai",
-        plan: parsed.data.plan || "Growth",
-        monthlyFee: parsed.data.plan === "Enterprise" ? 49999 : 24999,
-        status: "APPROVED",
-        googleOAuthEnabled: true,
-        maxAdminSeats: 2,
-      },
+  let companyId = "";
+  let businessName = request.businessName;
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      const company = await tx.company.create({
+        data: {
+          name: request.businessName,
+          city: request.city || "Mumbai",
+          plan: parsed.data.plan || "Growth",
+          monthlyFee: parsed.data.plan === "Enterprise" ? 49999 : 24999,
+          status: "APPROVED",
+          googleOAuthEnabled: true,
+          maxAdminSeats: 2,
+        },
+      });
+      companyId = company.id;
+      await tx.user.create({
+        data: {
+          email: request.email.toLowerCase(),
+          passwordHash: await hashPassword(temp),
+          fullName: request.fullName,
+          role: ROLES.ADMIN,
+          classification: "PAYROLL",
+          companyId: company.id,
+          active: true,
+          googleOAuthEnabled: true,
+        },
+      });
+      const site = await tx.jobSite.create({
+        data: {
+          name: `${request.businessName} — HQ`,
+          city: request.city || "Mumbai",
+          companyId: company.id,
+        },
+      });
+      await tx.project.create({
+        data: {
+          name: `${request.businessName} — Phase 1`,
+          companyId: company.id,
+          jobSiteId: site.id,
+        },
+      });
+      await tx.assetCategory.createMany({
+        data: [
+          { companyId: company.id, name: "Hand Tools" },
+          { companyId: company.id, name: "Heavy Equipment" },
+          { companyId: company.id, name: "Vehicles" },
+        ],
+      });
+      await tx.assetDepartment.createMany({
+        data: [
+          { companyId: company.id, name: "Civil" },
+          { companyId: company.id, name: "Electrical" },
+          { companyId: company.id, name: "Mechanical" },
+        ],
+      });
+      // Approved tenants live under Companies — remove the intake record.
+      await tx.accessRequest.delete({ where: { id: request.id } });
     });
-    await tx.user.create({
-      data: {
-        email: request.email.toLowerCase(),
-        passwordHash: await hashPassword(temp),
-        fullName: request.fullName,
-        role: ROLES.ADMIN,
-        classification: "PAYROLL",
-        companyId: company.id,
-        active: true,
-        googleOAuthEnabled: true,
-      },
-    });
-    const site = await tx.jobSite.create({
-      data: {
-        name: `${request.businessName} — HQ`,
-        city: request.city || "Mumbai",
-        companyId: company.id,
-      },
-    });
-    await tx.project.create({
-      data: {
-        name: `${request.businessName} — Phase 1`,
-        companyId: company.id,
-        jobSiteId: site.id,
-      },
-    });
-    await tx.assetCategory.createMany({
-      data: [
-        { companyId: company.id, name: "Hand Tools" },
-        { companyId: company.id, name: "Heavy Equipment" },
-        { companyId: company.id, name: "Vehicles" },
-      ],
-    });
-    await tx.assetDepartment.createMany({
-      data: [
-        { companyId: company.id, name: "Civil" },
-        { companyId: company.id, name: "Electrical" },
-        { companyId: company.id, name: "Mechanical" },
-      ],
-    });
-    await tx.accessRequest.update({
-      where: { id: request.id },
-      data: { status: REQUEST_STATUS.APPROVED },
-    });
-  });
+  } catch (e) {
+    console.error("Access request approval failed:", e);
+    return error("Could not provision company. Check server logs or try again.");
+  }
 
   return ok({
     status: REQUEST_STATUS.APPROVED,
+    companyId,
+    businessName,
     message: "Company approved. First admin can sign in via Google or the temporary password.",
     tempPassword: temp,
   });
