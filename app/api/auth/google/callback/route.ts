@@ -1,27 +1,35 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
-import { createSession } from "@/lib/auth";
+import { attachSessionToResponse } from "@/lib/auth";
 import { exchangeCodeForUser } from "@/lib/google-oauth";
 import { canUseGoogleOAuth } from "@/lib/oauth-cascade";
 import { ROLES } from "@/lib/constants";
 
 const STATE_COOKIE = "cp_oauth_state";
 
+function appBaseUrl() {
+  return (
+    process.env.NEXTAUTH_URL ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
+    process.env.APP_URL ||
+    "http://localhost:3000"
+  );
+}
+
 function loginError(msg: string) {
-  const base = process.env.NEXTAUTH_URL || process.env.APP_URL || "http://localhost:3000";
-  return NextResponse.redirect(`${base}/login?error=${encodeURIComponent(msg)}`);
+  return NextResponse.redirect(`${appBaseUrl()}/login?error=${encodeURIComponent(msg)}`);
 }
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
-  const savedState = cookies().get(STATE_COOKIE)?.value;
-  cookies().set(STATE_COOKIE, "", { path: "/", maxAge: 0 });
+  const savedState = req.headers.get("cookie")?.match(/cp_oauth_state=([^;]+)/)?.[1];
 
   if (!code || !state || state !== savedState) {
-    return loginError("Invalid Google sign-in state. Please try again.");
+    const res = loginError("Invalid Google sign-in state. Please try again.");
+    res.cookies.set(STATE_COOKIE, "", { path: "/", maxAge: 0 });
+    return res;
   }
 
   let profile: Awaited<ReturnType<typeof exchangeCodeForUser>>;
@@ -42,7 +50,6 @@ export async function GET(req: Request) {
     where: { OR: [{ googleId: profile.sub }, { email }] },
   });
 
-  // Bootstrap Super Admin on first Google login with configured email
   if (!user && superAdminEmail && email === superAdminEmail) {
     user = await prisma.user.create({
       data: {
@@ -80,7 +87,9 @@ export async function GET(req: Request) {
     });
   }
 
-  await createSession({
+  const response = NextResponse.redirect(`${appBaseUrl()}/dashboard`);
+  response.cookies.set(STATE_COOKIE, "", { path: "/", maxAge: 0 });
+  await attachSessionToResponse(response, {
     sub: user.id,
     email: user.email,
     role: user.role,
@@ -88,6 +97,5 @@ export async function GET(req: Request) {
     companyId: user.companyId,
   });
 
-  const base = process.env.NEXTAUTH_URL || process.env.APP_URL || "http://localhost:3000";
-  return NextResponse.redirect(`${base}/dashboard`);
+  return response;
 }

@@ -1,15 +1,26 @@
 import { cookies } from "next/headers";
 import { SignJWT, jwtVerify } from "jose";
 import bcrypt from "bcryptjs";
+import type { NextResponse } from "next/server";
 import { prisma } from "./prisma";
 
-const COOKIE_NAME = "cp_session";
+export const COOKIE_NAME = "cp_session";
 const ACCESS_TTL_SECONDS = 60 * 60 * 8; // 8h sliding session for MVP
 
 function getSecret() {
   const secret = process.env.JWT_SECRET;
   if (!secret) throw new Error("JWT_SECRET is not set");
   return new TextEncoder().encode(secret);
+}
+
+export function sessionCookieOptions() {
+  return {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax" as const,
+    path: "/",
+    maxAge: ACCESS_TTL_SECONDS,
+  };
 }
 
 export interface SessionPayload {
@@ -20,28 +31,35 @@ export interface SessionPayload {
   companyId: string | null;
 }
 
+export async function signSessionToken(payload: SessionPayload) {
+  return new SignJWT({ ...payload })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime(`${ACCESS_TTL_SECONDS}s`)
+    .sign(getSecret());
+}
+
+export async function createSession(payload: SessionPayload) {
+  const token = await signSessionToken(payload);
+  cookies().set(COOKIE_NAME, token, sessionCookieOptions());
+}
+
+/** Attach session cookie to a redirect response (required for OAuth callbacks). */
+export async function attachSessionToResponse(
+  response: NextResponse,
+  payload: SessionPayload
+) {
+  const token = await signSessionToken(payload);
+  response.cookies.set(COOKIE_NAME, token, sessionCookieOptions());
+  return response;
+}
+
 export async function hashPassword(plain: string) {
   return bcrypt.hash(plain, 12);
 }
 
 export async function verifyPassword(plain: string, hash: string) {
   return bcrypt.compare(plain, hash);
-}
-
-export async function createSession(payload: SessionPayload) {
-  const token = await new SignJWT({ ...payload })
-    .setProtectedHeader({ alg: "HS256" })
-    .setIssuedAt()
-    .setExpirationTime(`${ACCESS_TTL_SECONDS}s`)
-    .sign(getSecret());
-
-  cookies().set(COOKIE_NAME, token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: ACCESS_TTL_SECONDS,
-  });
 }
 
 export function destroySession() {
