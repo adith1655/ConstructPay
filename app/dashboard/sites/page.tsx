@@ -64,6 +64,38 @@ export default function JobSitesPage() {
     await load();
   }
 
+  async function deactivate(siteId: string, siteName: string) {
+    setError(null);
+    const detailRes = await fetch(`/api/sites/${siteId}`);
+    const detail = await detailRes.json().catch(() => ({}));
+    if (!detailRes.ok) {
+      setError(detail.error || "Could not load site details.");
+      return;
+    }
+    const deps = detail.dependencies ?? {};
+    const msg = [
+      `Deactivate "${siteName}"?`,
+      deps.activeAssets ? `${deps.activeAssets} active asset(s)` : null,
+      deps.pendingTransfers ? `${deps.pendingTransfers} pending transfer(s)` : null,
+      deps.openShifts ? `${deps.openShifts} open clock-in(s)` : null,
+    ]
+      .filter(Boolean)
+      .join("\n");
+    if (!confirm(msg)) return;
+
+    const res = await fetch(`/api/sites/${siteId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ active: false }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setError(data.error || "Could not deactivate site.");
+      return;
+    }
+    await load();
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -92,8 +124,18 @@ export default function JobSitesPage() {
       <div className="space-y-4">
         {sites.map((site) => (
           <div key={site.id} className="card p-5">
-            <h2 className="font-semibold text-steel-900">{site.name}</h2>
-            <p className="text-xs text-steel-500">{site.city}{site.address ? ` · ${site.address}` : ""}</p>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="font-semibold text-steel-900">{site.name}</h2>
+                <p className="text-xs text-steel-500">{site.city}{site.address ? ` · ${site.address}` : ""}</p>
+              </div>
+              <button
+                onClick={() => deactivate(site.id, site.name)}
+                className="btn-danger px-3 py-1.5 text-xs shrink-0"
+              >
+                Deactivate
+              </button>
+            </div>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <div>
                 <label className="label">Assign site manager</label>

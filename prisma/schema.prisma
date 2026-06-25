@@ -44,6 +44,7 @@ model Company {
   assetDepartments   AssetDepartment[]
   fixedAssets        FixedAsset[]
   expenseRecords     ExpenseRecord[]
+  assetTransferRequests AssetTransferRequest[]
 }
 
 model User {
@@ -80,6 +81,8 @@ model User {
   assetAssignmentsMade AssetAssignment[]  @relation("AssignmentCreator")
   notifications        InAppNotification[]
   expenseRecords       ExpenseRecord[]
+  assetTransfersRequested AssetTransferRequest[] @relation("TransferRequester")
+  assetTransfersReviewed  AssetTransferRequest[] @relation("TransferReviewer")
 }
 
 model JobSite {
@@ -107,6 +110,8 @@ model JobSite {
   goodsReceipts   GoodsReceiptNote[]
   fixedAssets     FixedAsset[]
   expenseRecords  ExpenseRecord[]
+  transfersFrom   AssetTransferRequest[] @relation("TransferFromSite")
+  transfersTo     AssetTransferRequest[] @relation("TransferToSite")
 }
 
 model UserSite {
@@ -349,6 +354,7 @@ model FixedAsset {
   auditLogs    AssetAuditLog[]
   editRequests AssetEditRequest[]
   assignments  AssetAssignment[]
+  transferItems AssetTransferItem[]
 
   @@unique([companyId, assetTagId])
 }
@@ -392,6 +398,41 @@ model AssetAssignment {
   assignedBy User       @relation("AssignmentCreator", fields: [assignedById], references: [id])
 
   @@unique([assetId, userId])
+}
+
+model AssetTransferRequest {
+  id            String    @id @default(cuid())
+  companyId     String
+  fromJobSiteId String
+  toJobSiteId   String
+  requestedById String
+  reason        String?
+  status        String    @default("PENDING") // PENDING | APPROVED | REJECTED | CANCELLED
+  reviewedById  String?
+  reviewedAt    DateTime?
+  rejectReason  String?
+  createdAt     DateTime  @default(now())
+
+  company     Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  fromJobSite JobSite              @relation("TransferFromSite", fields: [fromJobSiteId], references: [id], onDelete: Cascade)
+  toJobSite   JobSite              @relation("TransferToSite", fields: [toJobSiteId], references: [id], onDelete: Cascade)
+  requester   User                 @relation("TransferRequester", fields: [requestedById], references: [id], onDelete: Cascade)
+  reviewer    User?                @relation("TransferReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  items       AssetTransferItem[]
+}
+
+model AssetTransferItem {
+  id          String @id @default(cuid())
+  requestId   String
+  assetId     String
+  assetTagId  String
+  description String
+  cost        Float  @default(0)
+
+  request AssetTransferRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  asset   FixedAsset           @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@unique([requestId, assetId])
 }
 
 model ExpenseRecord {

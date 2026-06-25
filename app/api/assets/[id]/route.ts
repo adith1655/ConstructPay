@@ -91,18 +91,16 @@ export async function PATCH(
   const parsed = patchSchema.safeParse(body);
   if (!parsed.success) return error("Invalid update.");
 
-  if (parsed.data.jobSiteId && !(await canAccessSite(user, parsed.data.jobSiteId))) {
-    return error("Forbidden", 403);
+  if (parsed.data.jobSiteId && parsed.data.jobSiteId !== existing.jobSiteId) {
+    return error("Use asset transfer request for site changes.");
   }
 
   const data: Record<string, unknown> = { updatedById: user.id };
   for (const [k, v] of Object.entries(parsed.data)) {
     if (v === undefined) continue;
+    if (k === "jobSiteId") continue;
     if (k === "purchaseDate" || k === "maintenanceDueDate" || k === "warrantyExpiryDate") {
       data[k] = parseDate(v as string | null);
-    } else if (k === "jobSiteId" && v !== existing.jobSiteId) {
-      data.jobSiteId = v;
-      data.lastMovedAt = new Date();
     } else {
       data[k] = v;
     }

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ROLES } from "@/lib/constants";
 import { currency } from "@/lib/format";
+import { StatusBadge } from "@/components/dashboard/StatusBadge";
 
 type Lookup = { id: string; name: string };
 type Site = { id: string; name: string };
@@ -40,6 +41,18 @@ type EditRequest = {
   payload: string;
   asset: { id: string; assetTagId: string; description: string };
   requester: { fullName: string };
+};
+
+type TransferRequest = {
+  id: string;
+  status: string;
+  reason: string | null;
+  rejectReason: string | null;
+  createdAt: string;
+  fromJobSite: { id: string; name: string };
+  toJobSite: { id: string; name: string };
+  requester: { fullName: string };
+  items: { assetTagId: string; description: string }[];
 };
 
 const emptyForm = {
@@ -84,6 +97,15 @@ export default function AssetsPage() {
   const [workers, setWorkers] = useState<{ id: string; fullName: string }[]>([]);
   const [assignWorkerId, setAssignWorkerId] = useState("");
   const [adminEdit, setAdminEdit] = useState({ description: "", cost: "" });
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [listSiteFilter, setListSiteFilter] = useState("");
+  const [showTransfer, setShowTransfer] = useState(false);
+  const [transferToSiteId, setTransferToSiteId] = useState("");
+  const [transferReason, setTransferReason] = useState("");
+  const [adminTransfers, setAdminTransfers] = useState<TransferRequest[]>([]);
+  const [myTransfers, setMyTransfers] = useState<TransferRequest[]>([]);
+  const [rejectReason, setRejectReason] = useState("");
+  const [rejectingId, setRejectingId] = useState<string | null>(null);
 
   const loadLookups = useCallback(async () => {
     const [l, c, d] = await Promise.all([
@@ -131,6 +153,14 @@ export default function AssetsPage() {
       fetch("/api/users?role=WORKER")
         .then((r) => r.json())
         .then((d) => setWorkers(d.users ?? []));
+      fetch("/api/assets/transfers?inbox=mine")
+        .then((r) => r.json())
+        .then((d) => setMyTransfers(d.requests ?? []));
+    }
+    if (role === ROLES.ADMIN) {
+      fetch("/api/assets/transfers?inbox=admin")
+        .then((r) => r.json())
+        .then((d) => setAdminTransfers(d.requests ?? []));
     }
   }, [role]);
 
@@ -347,6 +377,98 @@ export default function AssetsPage() {
     setPendingEdits(d.requests ?? []);
   }
 
+  const filteredAssets = listSiteFilter
+    ? assets.filter((a) => a.jobSite.id === listSiteFilter)
+    : assets;
+
+  function toggleAssetSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function selectAllOnSite() {
+    const siteId = listSiteFilter || filteredAssets[0]?.jobSite.id;
+    if (!siteId) return;
+    const ids = assets.filter((a) => a.jobSite.id === siteId).map((a) => a.id);
+    setSelectedIds(new Set(ids));
+    if (!listSiteFilter) setListSiteFilter(siteId);
+  }
+
+  function clearSelection() {
+    setSelectedIds(new Set());
+  }
+
+  async function submitTransfer(e: React.FormEvent) {
+    e.preventDefault();
+    if (selectedIds.size === 0 || !transferToSiteId) return;
+    setError(null);
+    const fromAssets = assets.filter((a) => selectedIds.has(a.id));
+    const fromJobSiteId = fromAssets[0]?.jobSite.id;
+    if (!fromJobSiteId || fromAssets.some((a) => a.jobSite.id !== fromJobSiteId)) {
+      setError("Selected assets must all be from the same source site.");
+      return;
+    }
+    const res = await fetch("/api/assets/transfers", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        fromJobSiteId,
+        toJobSiteId: transferToSiteId,
+        reason: transferReason || undefined,
+        assetIds: [...selectedIds],
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setError(data.error || "Transfer request failed.");
+      return;
+    }
+    setSuccess(`Transfer request submitted for ${selectedIds.size} asset(s). Awaiting admin approval.`);
+    setShowTransfer(false);
+    setTransferToSiteId("");
+    setTransferReason("");
+    clearSelection();
+    const r = await fetch("/api/assets/transfers?inbox=mine");
+    const d = await r.json();
+    setMyTransfers(d.requests ?? []);
+  }
+
+  async function resolveTransfer(id: string, action: "APPROVE" | "REJECT" | "CANCEL") {
+    setError(null);
+    const body: Record<string, string> = { action };
+    if (action === "REJECT" && rejectReason) body.rejectReason = rejectReason;
+    const res = await fetch(`/api/assets/transfers/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setError(data.error || "Could not update transfer.");
+      return;
+    }
+    setSuccess(action === "APPROVE" ? "Transfer approved and applied." : action === "REJECT" ? "Transfer rejected." : "Transfer cancelled.");
+    setRejectingId(null);
+    setRejectReason("");
+    await load();
+    if (role === ROLES.ADMIN) {
+      const r = await fetch("/api/assets/transfers?inbox=admin");
+      const d = await r.json();
+      setAdminTransfers(d.requests ?? []);
+    }
+    if (role === ROLES.SITE_MANAGER) {
+      const r = await fetch("/api/assets/transfers?inbox=mine");
+      const d = await r.json();
+      setMyTransfers(d.requests ?? []);
+    }
+  }
+
+  const transferLogs = auditLogs.filter((log) => log.action === "TRANSFER");
+
   const isSiteManager = role === ROLES.SITE_MANAGER;
   const isAdmin = role === ROLES.ADMIN;
 
@@ -362,9 +484,16 @@ export default function AssetsPage() {
           </p>
         </div>
         {isSiteManager && (
-          <button onClick={() => setShowForm((v) => !v)} className="btn-primary">
-            {showForm ? "Close" : "+ Add Asset"}
-          </button>
+          <div className="flex flex-wrap gap-2">
+            {selectedIds.size > 0 && (
+              <button onClick={() => setShowTransfer(true)} className="btn-secondary">
+                Transfer ({selectedIds.size})
+              </button>
+            )}
+            <button onClick={() => setShowForm((v) => !v)} className="btn-primary">
+              {showForm ? "Close" : "+ Add Asset"}
+            </button>
+          </div>
         )}
       </div>
 
@@ -382,6 +511,88 @@ export default function AssetsPage() {
             ))}
           </ul>
         </div>
+      )}
+
+      {isAdmin && adminTransfers.length > 0 && (
+        <div className="card p-4">
+          <h2 className="font-semibold text-steel-900">Pending transfer requests</h2>
+          <ul className="mt-3 space-y-3">
+            {adminTransfers.map((t) => (
+              <li key={t.id} className="rounded-lg border border-steel-200 p-3 text-sm dark:border-steel-700">
+                <div className="font-medium text-steel-900">
+                  {t.fromJobSite.name} → {t.toJobSite.name} ({t.items.length} asset{t.items.length > 1 ? "s" : ""})
+                </div>
+                <div className="text-xs text-steel-500">
+                  Requested by {t.requester.fullName} · {t.items.map((i) => i.assetTagId).join(", ")}
+                </div>
+                {t.reason && <div className="mt-1 text-xs text-steel-600">Reason: {t.reason}</div>}
+                {rejectingId === t.id ? (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <input
+                      className="input flex-1 min-w-[12rem]"
+                      placeholder="Reject reason (optional)"
+                      value={rejectReason}
+                      onChange={(e) => setRejectReason(e.target.value)}
+                    />
+                    <button onClick={() => resolveTransfer(t.id, "REJECT")} className="btn-danger text-xs">Confirm reject</button>
+                    <button onClick={() => setRejectingId(null)} className="btn-secondary text-xs">Cancel</button>
+                  </div>
+                ) : (
+                  <div className="mt-2 flex gap-2">
+                    <button onClick={() => resolveTransfer(t.id, "APPROVE")} className="btn-success text-xs">Approve</button>
+                    <button onClick={() => setRejectingId(t.id)} className="btn-danger text-xs">Reject</button>
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {isSiteManager && myTransfers.filter((t) => t.status === "PENDING").length > 0 && (
+        <div className="card p-4">
+          <h2 className="font-semibold text-steel-900">My pending transfers</h2>
+          <ul className="mt-2 space-y-2 text-sm">
+            {myTransfers.filter((t) => t.status === "PENDING").map((t) => (
+              <li key={t.id} className="flex flex-wrap items-center justify-between gap-2">
+                <span>
+                  {t.fromJobSite.name} → {t.toJobSite.name} · {t.items.length} asset(s) · <StatusBadge status={t.status} />
+                </span>
+                <button onClick={() => resolveTransfer(t.id, "CANCEL")} className="btn-secondary text-xs">Cancel</button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {showTransfer && isSiteManager && (
+        <form onSubmit={submitTransfer} className="card space-y-4 p-5">
+          <h2 className="font-semibold text-steel-900">Request asset transfer</h2>
+          <p className="text-sm text-steel-500">
+            {selectedIds.size} asset(s) selected. Company admin must approve before assets move.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className="label">Destination site *</label>
+              <select required className="input" value={transferToSiteId} onChange={(e) => setTransferToSiteId(e.target.value)}>
+                <option value="">Select site…</option>
+                {sites
+                  .filter((s) => s.id !== (listSiteFilter || assets.find((a) => selectedIds.has(a.id))?.jobSite.id))
+                  .map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+              </select>
+            </div>
+            <div>
+              <label className="label">Reason (optional)</label>
+              <input className="input" value={transferReason} onChange={(e) => setTransferReason(e.target.value)} placeholder="e.g. Phase 2 mobilisation" />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button type="submit" className="btn-primary">Submit for approval</button>
+            <button type="button" onClick={() => setShowTransfer(false)} className="btn-secondary">Cancel</button>
+          </div>
+        </form>
       )}
 
       {isSiteManager && pendingEdits.length > 0 && (
@@ -512,17 +723,42 @@ export default function AssetsPage() {
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="card overflow-x-auto lg:col-span-2">
+          {isSiteManager && (
+            <div className="flex flex-wrap items-center gap-3 border-b border-steel-200 px-4 py-3 dark:border-steel-700">
+              <select className="input max-w-xs text-xs" value={listSiteFilter} onChange={(e) => setListSiteFilter(e.target.value)}>
+                <option value="">All sites</option>
+                {sites.map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+              <button type="button" onClick={selectAllOnSite} className="btn-secondary text-xs">Select all on site</button>
+              {selectedIds.size > 0 && (
+                <button type="button" onClick={clearSelection} className="btn-ghost text-xs">Clear ({selectedIds.size})</button>
+              )}
+            </div>
+          )}
           <table className="w-full text-sm">
             <thead className="bg-steel-50 text-left text-xs uppercase text-steel-500">
               <tr>
+                {isSiteManager && <th className="px-4 py-3 w-10" />}
                 <th className="px-4 py-3">Tag / Description</th>
                 <th className="px-4 py-3">Site</th>
                 <th className="px-4 py-3">Cost</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-steel-100">
-              {assets.map((a) => (
+              {filteredAssets.map((a) => (
                 <tr key={a.id} className={`cursor-pointer hover:bg-steel-50 ${selected?.id === a.id ? "bg-brand-50" : ""}`} onClick={() => setSelected(a)}>
+                  {isSiteManager && (
+                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(a.id)}
+                        onChange={() => toggleAssetSelect(a.id)}
+                        className="h-4 w-4 rounded border-steel-300"
+                      />
+                    </td>
+                  )}
                   <td className="px-4 py-3">
                     <div className="font-medium text-steel-900">{a.assetTagId}</div>
                     <div className="text-xs text-steel-500">{a.description}</div>
@@ -531,8 +767,8 @@ export default function AssetsPage() {
                   <td className="px-4 py-3">{currency(a.cost)}</td>
                 </tr>
               ))}
-              {assets.length === 0 && (
-                <tr><td colSpan={3} className="px-4 py-8 text-center text-steel-400">No assets yet.</td></tr>
+              {filteredAssets.length === 0 && (
+                <tr><td colSpan={isSiteManager ? 4 : 3} className="px-4 py-8 text-center text-steel-400">No assets yet.</td></tr>
               )}
             </tbody>
           </table>
@@ -582,6 +818,16 @@ export default function AssetsPage() {
                 <ul className="mt-2 max-h-32 space-y-1 overflow-y-auto text-xs text-steel-500">
                   {auditLogs.map((log, i) => (
                     <li key={i}>{log.action} · {log.performer.fullName} · {new Date(log.createdAt).toLocaleString("en-IN")}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {transferLogs.length > 0 && (
+              <div className="mt-4 border-t border-steel-100 pt-3">
+                <h3 className="text-xs font-semibold uppercase text-steel-500">Transfer history</h3>
+                <ul className="mt-2 max-h-24 space-y-1 overflow-y-auto text-xs text-steel-500">
+                  {transferLogs.slice(0, 5).map((log, i) => (
+                    <li key={i}>TRANSFER · {log.performer.fullName} · {new Date(log.createdAt).toLocaleString("en-IN")}</li>
                   ))}
                 </ul>
               </div>

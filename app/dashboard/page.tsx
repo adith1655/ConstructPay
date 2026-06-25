@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { ROLES, LABOR_BURDEN_MULTIPLIER } from "@/lib/constants";
+import { ROLES, LABOR_BURDEN_MULTIPLIER, TRANSFER_STATUS } from "@/lib/constants";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { StatusBadge } from "@/components/dashboard/StatusBadge";
 import { currency, currencyCompact, hours, dateShort } from "@/lib/format";
@@ -82,10 +82,10 @@ async function PlatformOverview({ name }: { name: string }) {
 }
 
 async function CompanyOverview({ companyId, name }: { companyId: string; name: string }) {
-  const [activeWorkers, pendingApprovals, openShifts, projects] = await Promise.all([
-    prisma.user.count({ where: { companyId, active: true, role: { in: [ROLES.WORKER, ROLES.SITE_MANAGER] } } }),
+  const [pendingApprovals, openShifts, pendingTransfers, projects] = await Promise.all([
     prisma.timeEntry.count({ where: { status: { in: ["PENDING", "FLAGGED"] }, jobSite: { companyId } } }),
     prisma.timeEntry.count({ where: { clockOut: null, jobSite: { companyId } } }),
+    prisma.assetTransferRequest.count({ where: { companyId, status: TRANSFER_STATUS.PENDING } }),
     prisma.project.findMany({
       where: { companyId },
       include: {
@@ -129,7 +129,7 @@ async function CompanyOverview({ companyId, name }: { companyId: string; name: s
         <StatCard label="Accrued labour cost" value={currencyCompact(totalActual)} accent="brand" hint="Approved time, all projects" />
         <StatCard label="On the clock now" value={`${openShifts}`} accent="emerald" hint="Live across your sites" />
         <StatCard label="Pending approvals" value={`${pendingApprovals}`} accent="amber" hint="Muster awaiting review" />
-        <StatCard label="Active workforce" value={`${activeWorkers}`} hint="On-roll + contract" />
+        <StatCard label="Pending asset transfers" value={`${pendingTransfers}`} accent={pendingTransfers ? "red" : "steel"} hint="Awaiting your approval" />
       </div>
 
       <div className="card">
@@ -164,10 +164,10 @@ async function CompanyOverview({ companyId, name }: { companyId: string; name: s
           <div className="mt-2 text-2xl font-bold text-steel-900">→</div>
           <div className="mt-1 text-xs text-steel-400">Clear muster before payroll cut-off</div>
         </Link>
-        <Link href="/dashboard/users" className="card p-5 transition hover:shadow-md">
-          <div className="text-sm font-medium text-steel-500">Team & roles</div>
+        <Link href="/dashboard/asset-transfers" className="card p-5 transition hover:shadow-md">
+          <div className="text-sm font-medium text-steel-500">Asset transfer reports</div>
           <div className="mt-2 text-2xl font-bold text-steel-900">→</div>
-          <div className="mt-1 text-xs text-steel-400">RBAC, on-roll / contract, wage rates</div>
+          <div className="mt-1 text-xs text-steel-400">Site-wise inbound / outbound history</div>
         </Link>
       </div>
     </div>
@@ -181,7 +181,7 @@ async function ManagerOverview({ userId, companyId, name }: { userId: string; co
   });
   const siteIds = sites.map((s) => s.id);
 
-  const [openShifts, pendingApprovals, weekHours] = await Promise.all([
+  const [openShifts, pendingApprovals, weekHours, myPendingTransfers] = await Promise.all([
     prisma.timeEntry.findMany({
       where: { jobSiteId: { in: siteIds }, clockOut: null },
       include: { user: { select: { fullName: true, trade: true } }, jobSite: { select: { name: true } } },
@@ -191,17 +191,27 @@ async function ManagerOverview({ userId, companyId, name }: { userId: string; co
       where: { jobSiteId: { in: siteIds }, clockIn: { gte: startOfWeek() }, status: "APPROVED" },
       _sum: { hours: true },
     }),
+    prisma.assetTransferRequest.count({
+      where: { requestedById: userId, status: TRANSFER_STATUS.PENDING },
+    }),
   ]);
 
   return (
     <div className="space-y-6">
       <PageHeading title={`Welcome back, ${name.split(" ")[0]}`} subtitle={`Site Manager — ${sites.map((s) => s.name).join(", ")}`} />
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Crew on the clock" value={`${openShifts.length}`} accent="emerald" />
         <StatCard label="Pending approvals" value={`${pendingApprovals}`} accent="amber" hint="On your sites" />
+        <StatCard label="My pending transfers" value={`${myPendingTransfers}`} accent={myPendingTransfers ? "red" : "steel"} hint="Awaiting admin approval" />
         <StatCard label="Approved hours this week" value={hours(weekHours._sum.hours ?? 0)} accent="brand" />
       </div>
+
+      <Link href="/dashboard/asset-transfers" className="card block p-5 transition hover:shadow-md">
+        <div className="text-sm font-medium text-steel-500">Asset transfer reports</div>
+        <div className="mt-2 text-2xl font-bold text-steel-900">→</div>
+        <div className="mt-1 text-xs text-steel-400">Site-wise transfer history for your sites</div>
+      </Link>
 
       <div className="card">
         <div className="flex items-center justify-between border-b border-steel-200 px-5 py-4">

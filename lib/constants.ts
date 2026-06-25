@@ -99,7 +99,22 @@ export const ASSET_AUDIT_ACTION = {
   ADD: "ADD",
   UPDATE: "UPDATE",
   RETIRE: "RETIRE",
+  TRANSFER: "TRANSFER",
 } as const;
+
+export const TRANSFER_STATUS = {
+  PENDING: "PENDING",
+  APPROVED: "APPROVED",
+  REJECTED: "REJECTED",
+  CANCELLED: "CANCELLED",
+} as const;
+
+export const TRANSFER_STATUS_LABELS: Record<string, string> = {
+  PENDING: "Pending approval",
+  APPROVED: "Approved",
+  REJECTED: "Rejected",
+  CANCELLED: "Cancelled",
+};
 
 export const EDIT_REQUEST_STATUS = {
   PENDING: "PENDING",
@@ -110,5 +125,6 @@ export const EDIT_REQUEST_STATUS = {
 export const NOTIFICATION_TYPE = {
   ALERT: "ALERT",
   EDIT_REQUEST: "EDIT_REQUEST",
+  TRANSFER_REQUEST: "TRANSFER_REQUEST",
   SYSTEM: "SYSTEM",
 } as const;
